@@ -573,3 +573,79 @@ def recalcular_previsao_projeto(db, proj_id):
         """, (proj_id, today_iso(),
               f"Previsão do projeto alterada de {format_date_br(anterior)} para {format_date_br(maior)} (devido às atividades)."))
         db.commit()
+
+
+# ──────────────────────────────────────────────────────────────
+# Cancelar / Pausar projeto
+# ──────────────────────────────────────────────────────────────
+
+def cancelar_projeto(db, proj_id):
+    """
+    Cancela o projeto:
+    - Todas as atividades NÃO finalizadas recebem status='Cancelado' e
+      Finalizacao = data de hoje.
+    - Atividades já Finalizadas são preservadas.
+    - O projeto recebe Status='Cancelado' e Finalizacao = hoje.
+    """
+    projeto = db.execute("SELECT * FROM projetos WHERE ID = ?", (proj_id,)).fetchone()
+    if not projeto:
+        raise ValueError('Projeto não encontrado')
+
+    hoje = today_iso()
+
+    # Atividades não finalizadas → Cancelado + Finalizacao = hoje
+    db.execute("""
+        UPDATE atividades
+        SET status = 'Cancelado', Finalizacao = ?
+        WHERE Id_projetos = ? AND status != 'Finalizado'
+    """, (hoje, proj_id))
+
+    # Projeto → Cancelado + Finalizacao = hoje
+    db.execute("""
+        UPDATE projetos
+        SET Status = 'Cancelado', Finalizacao = ?
+        WHERE ID = ?
+    """, (hoje, proj_id))
+    db.commit()
+
+    db.execute("""
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
+        VALUES (?, ?, ?)
+    """, (proj_id, hoje, "Projeto cancelado. Atividades não finalizadas marcadas como canceladas."))
+    db.commit()
+
+
+def pausar_projeto(db, proj_id):
+    """
+    Pausa o projeto:
+    - Todas as atividades NÃO finalizadas recebem status='Pausado' e
+      Finalizacao = data de hoje (registro da parada).
+    - Atividades já Finalizadas são preservadas.
+    - O projeto recebe Status='Pausado' e Finalizacao = hoje.
+    """
+    projeto = db.execute("SELECT * FROM projetos WHERE ID = ?", (proj_id,)).fetchone()
+    if not projeto:
+        raise ValueError('Projeto não encontrado')
+
+    hoje = today_iso()
+
+    # Atividades não finalizadas → Pausado + Finalizacao = hoje
+    db.execute("""
+        UPDATE atividades
+        SET status = 'Pausado', Finalizacao = ?
+        WHERE Id_projetos = ? AND status != 'Finalizado'
+    """, (hoje, proj_id))
+
+    # Projeto → Pausado + Finalizacao = hoje
+    db.execute("""
+        UPDATE projetos
+        SET Status = 'Pausado', Finalizacao = ?
+        WHERE ID = ?
+    """, (hoje, proj_id))
+    db.commit()
+
+    db.execute("""
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
+        VALUES (?, ?, ?)
+    """, (proj_id, hoje, "Projeto pausado. Atividades não finalizadas marcadas como pausadas."))
+    db.commit()

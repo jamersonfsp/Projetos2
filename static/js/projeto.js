@@ -403,6 +403,9 @@ const ProjetoView = (() => {
                             <button class="btn btn-success" id="btnFinalizar">Finalizar Projeto</button>
                             <button class="btn btn-primary" id="btnCobranca">Cobrança</button>
                             <button class="btn btn-secondary" id="btnAtualizacao">Atualização</button>
+                            <button class="btn btn-secondary" id="btnPausar">Pausar</button>
+                            <button class="btn btn-warning" id="btnCancelar">Cancelar</button>
+                            <button class="btn btn-danger" id="btnExcluir">Excluir Projeto</button>
                         </div>
                     </div>
 
@@ -430,6 +433,9 @@ const ProjetoView = (() => {
             document.getElementById('btnFinalizar').addEventListener('click', () => finalizar(pid));
             document.getElementById('btnCobranca').addEventListener('click', () => cobranca(pid));
             document.getElementById('btnAtualizacao').addEventListener('click', () => atualizacao(pid));
+            document.getElementById('btnPausar').addEventListener('click', () => pausar(pid));
+            document.getElementById('btnCancelar').addEventListener('click', () => cancelar(pid));
+            document.getElementById('btnExcluir').addEventListener('click', () => excluir(pid));
 
         } catch (e) {
             view.innerHTML = `<div class="empty-state"><h3>Erro</h3><p>${e.message}</p></div>`;
@@ -609,6 +615,130 @@ const ProjetoView = (() => {
                 App.toast('Atualização registrada', 'success');
                 m.close();
                 renderTela(pid);
+            } catch (e) {
+                App.toast('Erro: ' + e.message, 'error');
+            }
+        });
+    }
+
+    // ─── PAUSAR PROJETO ───
+    function pausar(pid) {
+        const m = App.modal({
+            title: 'Pausar Projeto',
+            size: 'md',
+            body: `
+                <p class="text-sm text-muted mb-3">
+                    O projeto e todas as atividades <strong>não finalizadas</strong> receberão o status
+                    <strong>"Pausado"</strong> e a data de finalização será registrada como hoje.
+                </p>
+                <p class="text-sm">Atividades já finalizadas serão preservadas.</p>
+                <div class="form-group">
+                    <label>Observação (opcional)</label>
+                    <textarea id="fObs" rows="3" placeholder="Motivo da pausa..."></textarea>
+                </div>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Cancelar'),
+                App.el('button', { class: 'btn btn-secondary', id: 'btnSavePausar' }, 'Pausar Projeto'),
+            ]
+        });
+        document.getElementById('btnSavePausar').addEventListener('click', async () => {
+            const obs = document.getElementById('fObs').value.trim();
+            try {
+                await API.projetos.pausar(pid);
+                // Registra a observação como atualização, se informada
+                if (obs) {
+                    await API.projetos.atualizacao(pid, { data: App.todayISO(), observacao: `Pausa: ${obs}` });
+                }
+                App.toast('Projeto pausado', 'success');
+                m.close();
+                renderTela(pid);
+            } catch (e) {
+                App.toast('Erro: ' + e.message, 'error');
+            }
+        });
+    }
+
+    // ─── CANCELAR PROJETO ───
+    function cancelar(pid) {
+        const m = App.modal({
+            title: 'Cancelar Projeto',
+            size: 'md',
+            body: `
+                <p class="text-sm text-muted mb-3">
+                    O projeto e todas as atividades <strong>não finalizadas</strong> receberão o status
+                    <strong>"Cancelado"</strong> e a data de finalização será registrada como hoje.
+                </p>
+                <p class="text-sm">Atividades já finalizadas serão preservadas.</p>
+                <div class="form-group">
+                    <label>Observação (opcional)</label>
+                    <textarea id="fObs" rows="3" placeholder="Motivo do cancelamento..."></textarea>
+                </div>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Cancelar'),
+                App.el('button', { class: 'btn btn-warning', id: 'btnSaveCancelar' }, 'Cancelar Projeto'),
+            ]
+        });
+        document.getElementById('btnSaveCancelar').addEventListener('click', async () => {
+            const obs = document.getElementById('fObs').value.trim();
+            try {
+                await API.projetos.cancelar(pid);
+                if (obs) {
+                    await API.projetos.atualizacao(pid, { data: App.todayISO(), observacao: `Cancelamento: ${obs}` });
+                }
+                App.toast('Projeto cancelado', 'success');
+                m.close();
+                renderTela(pid);
+            } catch (e) {
+                App.toast('Erro: ' + e.message, 'error');
+            }
+        });
+    }
+
+    // ─── EXCLUIR PROJETO ───
+    function excluir(pid) {
+        const m = App.modal({
+            title: 'Excluir Projeto',
+            size: 'md',
+            body: `
+                <div class="warning-box">
+                    <p><strong>Atenção!</strong> Você está prestes a excluir permanentemente este projeto.</p>
+                    <p>Todos os dados serão perdidos:</p>
+                    <ul>
+                        <li>Dados do projeto</li>
+                        <li>Todas as atividades</li>
+                        <li>Todas as atualizações</li>
+                        <li>Todas as cobranças registradas</li>
+                    </ul>
+                    <p class="text-danger"><strong>Esta ação NÃO pode ser desfeita.</strong></p>
+                </div>
+                <p class="text-sm mt-3">Para confirmar, digite <strong>EXCLUIR</strong> no campo abaixo:</p>
+                <div class="form-group">
+                    <input type="text" id="fConfirm" placeholder="Digite EXCLUIR" autocomplete="off">
+                </div>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Voltar'),
+                App.el('button', { class: 'btn btn-danger', id: 'btnSaveExcluir', disabled: 'disabled' }, 'Excluir Definitivamente'),
+            ]
+        });
+        // Só habilita o botão de exclusão se o usuário digitar EXCLUIR
+        const inp = document.getElementById('fConfirm');
+        const btn = document.getElementById('btnSaveExcluir');
+        inp.addEventListener('input', () => {
+            btn.disabled = (inp.value.trim().toUpperCase() !== 'EXCLUIR');
+        });
+        btn.addEventListener('click', async () => {
+            if (inp.value.trim().toUpperCase() !== 'EXCLUIR') {
+                App.toast('Digite EXCLUIR para confirmar', 'warning');
+                return;
+            }
+            try {
+                await API.projetos.delete(pid);
+                App.toast('Projeto excluído', 'success');
+                m.close();
+                App.navigate('/projetos');
             } catch (e) {
                 App.toast('Erro: ' + e.message, 'error');
             }

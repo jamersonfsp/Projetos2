@@ -56,6 +56,8 @@ const API = (() => {
             delete: (id)         => request('DELETE', `/api/projetos/${id}`),
             analise:   (id, data) => request('POST', `/api/projetos/${id}/analise`, data),
             finalizar: (id, data) => request('POST', `/api/projetos/${id}/finalizar`, data),
+            cancelar:  (id)       => request('POST', `/api/projetos/${id}/cancelar`),
+            pausar:    (id)       => request('POST', `/api/projetos/${id}/pausar`),
             cobranca:  (id, data) => request('POST', `/api/projetos/${id}/cobranca`, data),
             atualizacao:(id, data)=> request('POST', `/api/projetos/${id}/atualizacoes`, data),
         },

@@ -467,6 +467,26 @@ def finalizar_projeto_route(pid):
     return jsonify({'ok': True})
 
 
+@api_bp.route('/projetos/<int:pid>/cancelar', methods=['POST'])
+def cancelar_projeto_route(pid):
+    db = get_db()
+    try:
+        B.cancelar_projeto(db, pid)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'ok': True})
+
+
+@api_bp.route('/projetos/<int:pid>/pausar', methods=['POST'])
+def pausar_projeto_route(pid):
+    db = get_db()
+    try:
+        B.pausar_projeto(db, pid)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'ok': True})
+
+
 @api_bp.route('/projetos/<int:pid>/cobranca', methods=['POST'])
 def cobranca_route(pid):
     data = request.get_json()

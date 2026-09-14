@@ -261,6 +261,20 @@
     flex-wrap: wrap;
 }
 
+/* ─── Caixa de aviso (modal Excluir Projeto) ─── */
+.warning-box {
+    background: #FEF2F2;
+    border: 1px solid #FCA5A5;
+    border-left: 4px solid var(--danger);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    color: #7F1D1D;
+}
+.warning-box p { margin: 0 0 6px; font-size: 13px; }
+.warning-box p:last-child { margin-bottom: 0; }
+.warning-box ul { margin: 6px 0 6px 18px; font-size: 13px; }
+.text-danger { color: var(--danger); font-weight: 600; }
+
 /* ───────── Responsáveis / Setor ───────── */
 .crud-view .crud-layout {
     display: grid;
