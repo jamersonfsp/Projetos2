@@ -78,6 +78,9 @@ const ProjetoView = (() => {
                         <button type="button" class="btn btn-secondary" id="btnAtividades" disabled>
                             Incluir Atividades (salve o projeto primeiro)
                         </button>
+                        <button type="button" class="btn btn-success" id="btnNovo" style="display:none;">
+                            + Novo
+                        </button>
                     </div>
                 </form>
             </div>
@@ -103,6 +106,8 @@ const ProjetoView = (() => {
                 App.toast('Projeto criado! Agora inclua as atividades.', 'success');
                 document.getElementById('btnAtividades').disabled = false;
                 document.getElementById('btnAtividades').textContent = 'Incluir Atividades';
+                // Mostra o botão "Novo" para permitir cadastrar outro projeto
+                document.getElementById('btnNovo').style.display = 'inline-block';
             }
         });
 
@@ -112,6 +117,12 @@ const ProjetoView = (() => {
                 // Após fechar, recarrega a previsão do projeto
                 loadProjetoPrevisao(projetoId);
             });
+        });
+
+        // Botão "Novo" — recarrega a tela de cadastro limpa para um novo projeto
+        document.getElementById('btnNovo').addEventListener('click', () => {
+            if (!App.confirm('Iniciar o cadastro de um novo projeto? As alterações atuais já foram salvas.')) return;
+            renderCadastro();
         });
     }
 

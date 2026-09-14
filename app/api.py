@@ -186,18 +186,19 @@ def get_projeto(pid):
 def create_projeto():
     data = request.get_json()
     db = get_db()
+    # Previsao NÃO é informada pelo cliente — ela é calculada a partir
+    # das atividades (maior Previsao entre elas). Por isso não entra no INSERT.
     cur = db.execute("""
         INSERT INTO projetos
-        (Titulo, Descricao, Responsavel, Setor, Inicio, Previsao, Status, Tipo,
+        (Titulo, Descricao, Responsavel, Setor, Inicio, Status, Tipo,
          Finalizacao, Resolucao_Final, Observacao_Geral, cobranca)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get('Titulo'),
         data.get('Descricao'),
         data.get('Responsavel'),
         data.get('Setor'),
         data.get('Inicio'),
-        data.get('Previsao'),
         data.get('Status', 'Novo'),
         data.get('Tipo'),
         data.get('Finalizacao'),
@@ -207,6 +208,8 @@ def create_projeto():
     ))
     db.commit()
     pid = cur.lastrowid
+    # Recalcula Previsao (defensivo — se ainda não há atividades, mantém NULL)
+    B.recalcular_previsao_projeto(db, pid)
     # Registra atualização
     db.execute("""
         INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
@@ -220,19 +223,23 @@ def create_projeto():
 def update_projeto(pid):
     data = request.get_json()
     db = get_db()
+    # Previsao NÃO é atualizada aqui — ela é sempre recalculada pelas atividades.
+    # Se o cliente enviar Previsao, será ignorado.
     db.execute("""
         UPDATE projetos SET
             Titulo = ?, Descricao = ?, Responsavel = ?, Setor = ?,
-            Inicio = ?, Previsao = ?, Status = ?, Tipo = ?,
+            Inicio = ?, Status = ?, Tipo = ?,
             Finalizacao = ?, Resolucao_Final = ?, Observacao_Geral = ?, cobranca = ?
         WHERE ID = ?
     """, (
         data.get('Titulo'), data.get('Descricao'), data.get('Responsavel'), data.get('Setor'),
-        data.get('Inicio'), data.get('Previsao'), data.get('Status'), data.get('Tipo'),
+        data.get('Inicio'), data.get('Status'), data.get('Tipo'),
         data.get('Finalizacao'), data.get('Resolucao_Final'), data.get('Observacao_Geral'),
         data.get('cobranca'), pid
     ))
     db.commit()
+    # Sempre recalcula a Previsao com base nas atividades (maior Previsao)
+    B.recalcular_previsao_projeto(db, pid)
     return jsonify({'ID': pid, **data})
 
 
