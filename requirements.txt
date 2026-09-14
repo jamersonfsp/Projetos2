@@ -1,0 +1,14 @@
+# Sistema de Controle de Projeto - Dependências
+# Python 3.10+
+
+# Webview desktop
+pywebview>=5.0.0
+
+# Backend web
+Flask>=3.0.0
+
+# Banco de dados (sqlite3 já vem no Python, mas garante driver)
+# (não é necessário pip install)
+
+# Utilitários
+python-dateutil>=2.8.2

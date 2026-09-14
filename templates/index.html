@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Controle de Projeto</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/modules.css">
+</head>
+<body>
+    <div id="app" class="app-shell">
+        <!-- Sidebar retrátil -->
+        <aside id="sidebar" class="sidebar" data-state="open">
+            <div class="sidebar-header">
+                <button id="logoBtn" class="logo-btn" title="Abrir/Fechar menu">
+                    <div class="logo-circle">
+                        <img src="/static/assets/logo.png" alt="Logo" width="36" height="36">
+                    </div>
+                    <span class="logo-text">Sistema de Projetos</span>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#/dashboard"        class="nav-item" data-route="dashboard">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                    <span class="nav-label">Dashboard</span>
+                </a>
+                <a href="#/relatorio"        class="nav-item" data-route="relatorio">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <span class="nav-label">Relatório Diário</span>
+                </a>
+                <a href="#/cadastro"         class="nav-item" data-route="cadastro">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                    <span class="nav-label">Cadastro de Projeto</span>
+                </a>
+                <a href="#/projetos"         class="nav-item" data-route="projetos">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    <span class="nav-label">Lista de Projetos</span>
+                </a>
+                <a href="#/calendario"       class="nav-item disabled" data-route="calendario">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span class="nav-label">Calendário <em>(em breve)</em></span>
+                </a>
+                <a href="#/responsaveis"     class="nav-item" data-route="responsaveis">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span class="nav-label">Responsáveis</span>
+                </a>
+                <a href="#/setor"            class="nav-item" data-route="setor">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+                    <span class="nav-label">Setor</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <span class="version-tag">v2.0</span>
+            </div>
+        </aside>
+
+        <!-- Conteúdo principal -->
+        <main id="main" class="main-content">
+            <header class="topbar">
+                <button id="menuToggle" class="icon-btn" title="Retrair menu">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <h1 id="pageTitle" class="page-title">Dashboard</h1>
+                <div class="topbar-right">
+                    <span id="clock" class="clock"></span>
+                </div>
+            </header>
+            <div id="view" class="view-container">
+                <!-- conteúdo das telas é carregado aqui -->
+                <div class="loading">Carregando...</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Container de modais -->
+    <div id="modalRoot"></div>
+
+    <!-- Scripts -->
+    <script src="/static/vendor/chart.min.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/relatorio.js"></script>
+    <script src="/static/js/projeto.js"></script>
+    <script src="/static/js/atividades.js"></script>
+    <script src="/static/js/responsaveis.js"></script>
+    <script src="/static/js/setor.js"></script>
+</body>
+</html>

@@ -1,0 +1,482 @@
+/* =========================================================
+   components.css - Botões, cards, filtros, etc.
+   ========================================================= */
+
+/* ───────── Botões ───────── */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+    text-decoration: none;
+    line-height: 1.2;
+}
+.btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(54, 55, 61, 0.15); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.btn-secondary {
+    background: #fff;
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+.btn-secondary:hover:not(:disabled) {
+    background: #F9FAFB;
+    border-color: var(--text-secondary);
+}
+
+.btn-success {
+    background: var(--success);
+    color: #fff;
+    border-color: var(--success);
+}
+.btn-success:hover:not(:disabled) { filter: brightness(0.92); }
+
+.btn-danger {
+    background: var(--danger);
+    color: #fff;
+    border-color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) { filter: brightness(0.92); }
+
+.btn-warning {
+    background: var(--warning);
+    color: #fff;
+    border-color: var(--warning);
+}
+.btn-warning:hover:not(:disabled) { filter: brightness(0.92); }
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+    background: var(--primary-lighter);
+    color: var(--primary);
+}
+
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-lg { padding: 12px 22px; font-size: 15px; }
+.btn-block { width: 100%; }
+.btn-icon { padding: 8px; }
+
+/* ───────── Cards ───────── */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow-sm);
+}
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.card-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+.card-header .actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* ───────── Stat cards (Dashboard) ───────── */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+.stat-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+.stat-card .stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+.stat-card .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.stat-card .stat-value.success { color: var(--success); }
+.stat-card .stat-value.danger  { color: var(--danger); }
+.stat-card .stat-value.warning { color: var(--warning); }
+.stat-card .stat-sub {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+}
+
+/* ───────── Filter bar ───────── */
+.filter-bar {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+.filter-bar .form-group { min-width: 0; }
+.filter-bar .filter-actions {
+    display: flex;
+    gap: 8px;
+    align-items: end;
+}
+
+/* ───────── Multiselect ───────── */
+.multiselect {
+    position: relative;
+}
+.multiselect-trigger {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: var(--text);
+    min-height: 38px;
+    transition: var(--transition);
+}
+.multiselect-trigger:hover { border-color: var(--text-secondary); }
+.multiselect-trigger .placeholder { color: var(--text-secondary); }
+.multiselect-trigger .arrow { transition: transform .2s; }
+.multiselect.open .multiselect-trigger .arrow { transform: rotate(180deg); }
+
+.multiselect-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    z-index: 50;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    display: none;
+}
+.multiselect.open .multiselect-panel { display: block; }
+.multiselect-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    transition: var(--transition);
+}
+.multiselect-option:hover { background: var(--primary-lighter); }
+.multiselect-option input { margin: 0; }
+
+/* ───────── Charts container ───────── */
+.chart-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+@media (max-width: 1100px) {
+    .chart-grid { grid-template-columns: 1fr; }
+}
+.chart-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+}
+.chart-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+}
+.chart-card .chart-filters {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.chart-card .chart-filters .chip {
+    padding: 4px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+.chart-card .chart-filters .chip.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.chart-card .chart-filters .chip:hover:not(.active) {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.chart-canvas-wrap {
+    position: relative;
+    height: 240px;
+}
+
+/* ───────── Two-column layout ───────── */
+.two-col {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    align-items: start;
+}
+.two-col.left-wide { grid-template-columns: 1.5fr 1fr; }
+@media (max-width: 1100px) {
+    .two-col, .two-col.left-wide { grid-template-columns: 1fr; }
+}
+
+/* ───────── Lista de cards (responsáveis, setores) ───────── */
+.list-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.list-card-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: var(--transition);
+    cursor: pointer;
+}
+.list-card-item:hover { background: var(--primary-lighter); }
+.list-card-item:last-child { border-bottom: none; }
+.list-card-item.active { background: var(--primary-lighter); border-left: 3px solid var(--primary); }
+.list-card-item .item-info { flex: 1; min-width: 0; }
+.list-card-item .item-name { font-weight: 500; color: var(--text); }
+.list-card-item .item-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.list-card-item .item-actions { display: flex; gap: 4px; }
+
+/* ───────── Tabs ───────── */
+.tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+}
+.tab {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    transition: var(--transition);
+    font-weight: 500;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* ───────── Anotações / atualizações ───────── */
+.notes-box {
+    background: #FFFEF7;
+    border: 1px solid #F1E5B7;
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-y: auto;
+    max-height: 360px;
+    min-height: 200px;
+}
+.notes-box .note-entry {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+.notes-box .note-entry:last-child {
+    border-bottom: none;
+}
+.notes-box .note-date {
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 12px;
+    display: block;
+    margin-bottom: 2px;
+}
+.notes-box .note-text {
+    display: block;
+    padding-left: 8px;
+    color: var(--text);
+}
+
+/* ───────── Gantt ───────── */
+.gantt-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+    overflow: hidden;
+    height: 100%;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+}
+.gantt-header {
+    background: var(--primary);
+    color: #fff;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.gantt-body {
+    flex: 1;
+    overflow: auto;
+    padding: 8px;
+}
+
+/* ───────── Tooltip ───────── */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+.tooltip-text {
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity .2s;
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 100;
+}
+
+/* ───────── Atividades tabela editável ───────── */
+.ativ-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+}
+.ativ-table th {
+    background: var(--primary);
+    color: #fff;
+    padding: 8px 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.ativ-table td {
+    padding: 4px;
+    border-bottom: 1px solid var(--border);
+}
+.ativ-table input, .ativ-table select {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12.5px;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 4px;
+    transition: var(--transition);
+}
+.ativ-table input:hover, .ativ-table select:hover {
+    background: var(--primary-lighter);
+}
+.ativ-table input:focus, .ativ-table select:focus {
+    background: #fff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(54, 55, 61, 0.1);
+    outline: none;
+}
+.ativ-table tr.dragging { opacity: 0.4; }
+.ativ-table tr.drag-over { border-top: 2px solid var(--primary); }
+.ativ-table .row-num {
+    background: var(--primary-lighter);
+    text-align: center;
+    font-weight: 600;
+    color: var(--primary);
+    cursor: grab;
+    width: 32px;
+}
+.ativ-table .row-num:active { cursor: grabbing; }
+.ativ-table .btn-del {
+    background: transparent;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    transition: var(--transition);
+}
+.ativ-table .btn-del:hover { background: var(--danger-bg); }

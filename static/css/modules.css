@@ -1,0 +1,346 @@
+/* =========================================================
+   modules.css - Estilos específicos por módulo
+   ========================================================= */
+
+/* ───────── Dashboard ───────── */
+.dashboard-view .stat-card .stat-value.pct-low    { color: var(--success); }
+.dashboard-view .stat-card .stat-value.pct-medium { color: var(--warning); }
+.dashboard-view .stat-card .stat-value.pct-high   { color: var(--danger); }
+
+.dashboard-view .timeline-wrap {
+    position: relative;
+    height: 280px;
+}
+
+.dashboard-view .card .table-wrap {
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+/* ───────── Relatório Diário ───────── */
+.relatorio-view .motivo-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--primary-lighter);
+    color: var(--primary);
+    white-space: nowrap;
+}
+.relatorio-view .motivo-badge.atrasado { background: var(--danger-bg); color: var(--danger); }
+.relatorio-view .motivo-badge.hoje     { background: var(--warning-bg); color: var(--warning); }
+
+.relatorio-view .dias-neg { color: var(--danger); font-weight: 600; }
+.relatorio-view .dias-zero { color: var(--warning); font-weight: 600; }
+
+/* ───────── Cadastro de Projeto ───────── */
+.cadastro-view .form-card {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* ───────── Cadastro de Atividades ───────── */
+.atividades-side-by-side {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 240px);
+    min-height: 480px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--card-bg);
+}
+
+/* Lado esquerdo: tabela de atividades */
+.ativ-left {
+    flex: 1 1 55%;
+    overflow: auto;
+    border-right: 2px solid var(--primary-lighter);
+}
+.ativ-left table.ativ-table {
+    width: 100%;
+    min-width: 950px;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.ativ-left table.ativ-table th {
+    background: var(--primary);
+    color: #fff;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 65px;
+    vertical-align: middle;
+}
+.ativ-left table.ativ-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    height: 28px;
+}
+.ativ-left table.ativ-table tbody tr:hover { background: #F9FAFB; }
+.ativ-left table.ativ-table input[type="text"],
+.ativ-left table.ativ-table input[type="date"],
+.ativ-left table.ativ-table input[type="number"],
+.ativ-left table.ativ-table select {
+    padding: 5px 8px;
+    font-size: 12.5px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    width: 100%;
+}
+.ativ-left table.ativ-table input[type="checkbox"] {
+    width: auto;
+}
+.ativ-left table.ativ-table .col-num { width: 36px; text-align: center; }
+.ativ-left table.ativ-table .col-ativ { min-width: 160px; }
+.ativ-left table.ativ-table .col-resp { min-width: 120px; }
+.ativ-left table.ativ-table .col-dep { width: 100px; min-width: 100px; }
+.ativ-left table.ativ-table .col-ini { width: 120px; }
+.ativ-left table.ativ-table .col-dur { width: 80px; min-width: 80px; }
+.ativ-left table.ativ-table .col-prev { width: 120px; }
+.ativ-left table.ativ-table .col-status { width: 140px; min-width: 140px; }
+.ativ-left table.ativ-table .col-chk { width: 44px; text-align: center; }
+.ativ-left table.ativ-table .col-act { width: 36px; text-align: center; }
+.ativ-left table.ativ-table .row-num {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.ativ-left table.ativ-table .btn-del {
+    background: transparent;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.ativ-left table.ativ-table .btn-del:hover { background: var(--danger-bg); }
+.ativ-left table.ativ-table tr.dragging { opacity: 0.4; }
+.ativ-left table.ativ-table tr.drag-over { border-top: 2px solid var(--primary); }
+
+/* Lado direito: Gantt */
+.ativ-right {
+    flex: 1 1 45%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.ativ-right .gantt-header-bar {
+    padding: 8px 14px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.ativ-right .gantt-scroll {
+    flex: 1;
+    overflow: auto;
+    padding: 8px;
+}
+.ativ-right .gantt-body {
+    min-width: fit-content;
+}
+
+/* Data pretendida */
+.data-pretendida {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--primary-lighter);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.data-pretendida label {
+    font-size: 12.5px;
+    color: var(--text);
+    font-weight: 500;
+}
+.data-pretendida input[type="date"] {
+    width: auto;
+}
+
+/* ───────── Lista de Projetos ───────── */
+.projetos-view .filter-bar {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.projetos-view .situacao-cell .badge {
+    font-size: 11px;
+}
+
+/* ───────── Tela do Projeto ───────── */
+.projeto-view .projeto-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 16px 20px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.projeto-view .projeto-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+}
+.projeto-view .projeto-header .meta {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    opacity: 0.95;
+    flex-wrap: wrap;
+}
+.projeto-view .projeto-header .meta span {
+    background: rgba(255,255,255,0.15);
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.projeto-view .dados-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.projeto-view .dados-grid .form-group label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+.projeto-view .dados-grid input[disabled] {
+    background: #F9FAFB;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.projeto-view .textareas-full {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 14px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+}
+.projeto-view .textareas-full .form-group {
+    width: 100%;
+}
+.projeto-view .textareas-full textarea {
+    width: 100%;
+    min-height: 70px;
+    resize: vertical;
+}
+
+.projeto-view .atividades-scroll {
+    max-height: 380px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.projeto-view .acoes-gerais {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    flex-wrap: wrap;
+}
+
+/* ───────── Responsáveis / Setor ───────── */
+.crud-view .crud-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+}
+@media (max-width: 900px) {
+    .crud-view .crud-layout { grid-template-columns: 1fr; }
+}
+.crud-view .list-pane {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+}
+.crud-view .form-pane {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+}
+.crud-view .form-pane h3 {
+    font-size: 15px;
+    margin-bottom: 14px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+}
+
+/* ───────── Calendário (em breve) ───────── */
+.coming-soon {
+    text-align: center;
+    padding: 80px 20px;
+}
+.coming-soon svg {
+    width: 80px;
+    height: 80px;
+    color: var(--primary);
+    opacity: 0.5;
+    margin-bottom: 16px;
+}
+.coming-soon h2 {
+    font-size: 22px;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+.coming-soon p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* ───────── SVG Gantt ───────── */
+.gantt-svg {
+    display: block;
+    background: #fff;
+    font-family: var(--font-sans);
+    user-select: none;
+}
+.gantt-svg .grid-line { stroke: var(--border); stroke-width: 0.5; }
+.gantt-svg .grid-line.weekend { fill: #F9FAFB; }
+.gantt-svg .axis-bg { fill: var(--primary); }
+.gantt-svg .axis-text { fill: #fff; font-size: 12px; font-weight: 600; }
+.gantt-svg .axis-text-month { fill: #fff; font-size: 13px; font-weight: 700; }
+.gantt-svg .axis-text-year  { fill: #fff; font-size: 14px; font-weight: 700; }
+.gantt-svg .bar { fill: var(--accent); rx: 4; }
+.gantt-svg .bar.atrasado { fill: var(--danger); }
+.gantt-svg .bar.finalizado { fill: var(--success); }
+.gantt-svg .bar-label { fill: var(--text); font-size: 12px; font-weight: 500; }
+.gantt-svg .previsao-line { stroke: var(--danger); stroke-width: 2; stroke-dasharray: 4,3; }
+.gantt-svg .previsao-label {
+    fill: #fff;
+    font-size: 11px;
+    font-weight: 600;
+}
+.gantt-svg .previsao-label-bg {
+    fill: var(--danger);
+    rx: 3;
+}
+.gantt-svg .weekend-col { fill: #F3F4F6; }
