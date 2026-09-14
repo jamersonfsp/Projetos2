@@ -213,7 +213,7 @@ Lista de atividades a tratar no dia (ver regras em 3.3). Coluna "Analisar" leva 
 
 ### 5.3 Cadastro de Projeto
 **Formulário:**
-- Titulo (text), Descrição (textarea máx 500), Responsavel (select), Setor (select), Inicio (date), Previsao (date — preenchida pela última atividade), Tipo (select: Projeto, Melhoria de Mão-de-obra, Melhoria de Processo, Atividades, Outros), Status (default "Novo").
+- Titulo (text), Descrição (textarea máx 2000), Responsavel (select), Setor (select), Inicio (date), Previsao (date — preenchida pela última atividade), Tipo (select: Projeto, Melhoria de Mão-de-obra, Melhoria de Processo, Atividades, Outros), Status (default "Novo").
 - Botão **"Incluir Atividades"** abre popup com a tela de Cadastro de Atividades (5.4).
 
 ### 5.4 Cadastro de Atividades

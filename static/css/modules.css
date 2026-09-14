@@ -344,3 +344,17 @@
     rx: 3;
 }
 .gantt-svg .weekend-col { fill: #F3F4F6; }
+
+/* ─── Setas de dependência ─── */
+.gantt-svg .dep-arrow {
+    fill: none;
+    stroke: #6B7280;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.85;
+}
+.gantt-svg .dep-arrow-head {
+    fill: #6B7280;
+    stroke: none;
+}

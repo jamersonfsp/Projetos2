@@ -621,12 +621,20 @@ const AtividadesView = (() => {
         drawLine(svg, x0, 65, x0, height - 5, { class: 'grid-line' });
 
         // ─── Barras das atividades ───
+        // Mapeia sequencia → {xIni, xFim, y, hasInicio} para desenhar setas de dependência
+        const barPositions = {};
+
         rows.forEach((r, idx) => {
             const y = headerHeight + idx * rowHeight;
             // Linha horizontal divisória inferior (contínuo com a tabela)
             drawLine(svg, x0, y + rowHeight, x0 + totalDays * dayWidth, y + rowHeight, { class: 'grid-line' });
 
-            if (!r.Inicio) return;
+            const seq = idx + 1;
+
+            if (!r.Inicio) {
+                barPositions[seq] = null;
+                return;
+            }
 
             const xIni = dateToX(r.Inicio);
             // Previsão = último dia da barra (inclusive), então + dayWidth
@@ -647,6 +655,34 @@ const AtividadesView = (() => {
                 ? (r.Atividade.length > 20 ? r.Atividade.slice(0, 20) + '…' : r.Atividade)
                 : `#${idx + 1}`;
             drawText(svg, xIni + 6, y + rowHeight / 2 + 4, `${idx + 1}. ${label}`, { class: 'bar-label' });
+
+            // Guarda posição para setas de dependência
+            barPositions[seq] = {
+                xIni,
+                xFim,
+                yTop: y + 4,
+                yMid: y + rowHeight / 2,
+                yBot: y + rowHeight - 4
+            };
+        });
+
+        // ─── Setas de dependência ───
+        // Para cada atividade i que depende de j, desenha uma seta do fim de j para o início de i.
+        rows.forEach((r, idx) => {
+            const depSeq = r.Dependencia;
+            if (!depSeq) return;
+            const dep = barPositions[depSeq];
+            const cur = barPositions[idx + 1];
+            if (!dep || !cur) return;
+
+            // Origem: meio da borda direita da barra predecessora
+            const x1 = dep.xFim;
+            const y1 = dep.yMid;
+            // Destino: meio da borda esquerda da barra dependente
+            const x2 = cur.xIni;
+            const y2 = cur.yMid;
+
+            drawDependencyArrow(svg, x1, y1, x2, y2);
         });
 
         // ─── Linha vermelha da data pretendida (na divisa do dia) ───
@@ -703,6 +739,53 @@ const AtividadesView = (() => {
             l.setAttribute(k, v);
         }
         svg.appendChild(l);
+    }
+
+    // ─── Desenha uma seta de dependência (origem → destino) ───
+    // Caminho em "L": sai da borda direita da predecessora, sobe/desce até a linha
+    // da atividade dependente, e entra pela borda esquerda com uma ponta de seta.
+    function drawDependencyArrow(svg, x1, y1, x2, y2) {
+        const gap = 6;           // espaço entre a ponta da seta e a barra
+        const targetX = x2 - gap; // ponto onde a ponta da seta termina
+        const arrowSize = 6;      // tamanho da cabeça da seta
+
+        // Se a predecessora termina antes do início da dependente (caso normal),
+        // faz um L simples: horizontal → vertical → horizontal.
+        // Se a predecessora termina DEPOIS do início da dependente (overlap),
+        // faz um contorno por fora: sai para a direita, sobe/desce, volta para a esquerda.
+        let pathD;
+
+        if (x1 <= targetX) {
+            // Caminho simples: sai de (x1,y1) → vai até metade do espaço → sobe/desce até y2 → chega em targetX
+            const midX = x1 + Math.max(4, (targetX - x1) / 2);
+            pathD = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${targetX} ${y2}`;
+        } else {
+            // Overlap: contorna por baixo (ou por cima se a dependente estiver acima)
+            const offset = 10; // distância do contorno
+            if (y2 >= y1) {
+                // Dependente está abaixo: contorna por baixo
+                const bottomY = Math.max(y1, y2) + offset;
+                pathD = `M ${x1} ${y1} L ${x1 + offset} ${y1} L ${x1 + offset} ${bottomY} L ${targetX - offset} ${bottomY} L ${targetX - offset} ${y2} L ${targetX} ${y2}`;
+            } else {
+                // Dependente está acima: contorna por cima
+                const topY = Math.min(y1, y2) - offset;
+                pathD = `M ${x1} ${y1} L ${x1 + offset} ${y1} L ${x1 + offset} ${topY} L ${targetX - offset} ${topY} L ${targetX - offset} ${y2} L ${targetX} ${y2}`;
+            }
+        }
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathD);
+        path.setAttribute('class', 'dep-arrow');
+        svg.appendChild(path);
+
+        // Cabeça da seta (triângulo) apontando para a direita, em (x2 - gap, y2)
+        const ax = targetX;
+        const ay = y2;
+        const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        head.setAttribute('points',
+            `${ax + arrowSize},${ay} ${ax},${ay - arrowSize / 2} ${ax},${ay + arrowSize / 2}`);
+        head.setAttribute('class', 'dep-arrow-head');
+        svg.appendChild(head);
     }
 
     return { openModal };

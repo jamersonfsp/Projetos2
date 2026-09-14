@@ -68,8 +68,8 @@ const ProjetoView = (() => {
                             <input type="date" name="Previsao" id="fPrevisao" disabled>
                         </div>
                         <div class="form-group span-3">
-                            <label>Descrição (até 500 caracteres)</label>
-                            <textarea name="Descricao" maxlength="500" rows="3" placeholder="Descreva o projeto..."></textarea>
+                            <label>Descrição (até 2000 caracteres)</label>
+                            <textarea name="Descricao" maxlength="2000" rows="5" placeholder="Descreva o projeto..."></textarea>
                         </div>
                     </div>
 
