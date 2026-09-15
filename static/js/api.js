@@ -86,5 +86,15 @@ const API = (() => {
             previsao: (data) => request('POST', '/api/calcular/previsao', data),
             inicio:   (data) => request('POST', '/api/calcular/inicio', data),
         },
+        // Modelos de Atividades
+        modelos: {
+            list:   ()         => request('GET',  '/api/modelos'),
+            get:    (id)       => request('GET',  `/api/modelos/${id}`),
+            create: (data)     => request('POST', '/api/modelos', data),
+            update: (id, data) => request('PUT',  `/api/modelos/${id}`, data),
+            delete: (id)       => request('DELETE', `/api/modelos/${id}`),
+            getAtividades:    (id)       => request('GET',  `/api/modelos/${id}/atividades`),
+            saveAtividades:   (id, data) => request('POST', `/api/modelos/${id}/atividades`, data),
+        },
     };
 })();

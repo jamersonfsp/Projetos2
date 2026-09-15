@@ -643,3 +643,109 @@ def calcular_inicio_route():
     else:
         result = data.get('projeto_inicio')
     return jsonify({'inicio': result, 'inicio_br': B.format_date_br(result)})
+
+
+# ──────────────────────────────────────────────────────────────
+# Modelos de Atividades
+# ──────────────────────────────────────────────────────────────
+
+@api_bp.route('/modelos', methods=['GET'])
+def list_modelos():
+    db = get_db()
+    rows = db.execute("SELECT * FROM modelo_atividades ORDER BY Nome").fetchall()
+    return jsonify([row_to_dict(r) for r in rows])
+
+
+@api_bp.route('/modelos', methods=['POST'])
+def create_modelo():
+    data = request.get_json()
+    db = get_db()
+    cur = db.execute("INSERT INTO modelo_atividades (Nome) VALUES (?)", (data.get('Nome'),))
+    db.commit()
+    return jsonify({'ID': cur.lastrowid, **data}), 201
+
+
+@api_bp.route('/modelos/<int:mid>', methods=['GET'])
+def get_modelo(mid):
+    db = get_db()
+    m = db.execute("SELECT * FROM modelo_atividades WHERE ID = ?", (mid,)).fetchone()
+    if not m:
+        return jsonify({'error': 'Modelo não encontrado'}), 404
+    atividades = db.execute(
+        "SELECT * FROM lista_atividades WHERE Id_modelo_atividades = ? ORDER BY sequencia",
+        (mid,)
+    ).fetchall()
+    return jsonify({
+        'modelo': row_to_dict(m),
+        'atividades': [row_to_dict(a) for a in atividades],
+    })
+
+
+@api_bp.route('/modelos/<int:mid>', methods=['PUT'])
+def update_modelo(mid):
+    data = request.get_json()
+    db = get_db()
+    db.execute("UPDATE modelo_atividades SET Nome = ? WHERE ID = ?", (data.get('Nome'), mid))
+    db.commit()
+    return jsonify({'ID': mid, **data})
+
+
+@api_bp.route('/modelos/<int:mid>', methods=['DELETE'])
+def delete_modelo(mid):
+    db = get_db()
+    db.execute("DELETE FROM modelo_atividades WHERE ID = ?", (mid,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@api_bp.route('/modelos/<int:mid>/atividades', methods=['GET'])
+def list_modelo_atividades(mid):
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM lista_atividades WHERE Id_modelo_atividades = ? ORDER BY sequencia",
+        (mid,)
+    ).fetchall()
+    return jsonify([row_to_dict(r) for r in rows])
+
+
+@api_bp.route('/modelos/<int:mid>/atividades', methods=['POST'])
+def save_modelo_atividades(mid):
+    """Substitui todas as atividades do modelo pela lista enviada."""
+    data = request.get_json()
+    atividades = data.get('atividades', [])
+    db = get_db()
+
+    # Remove as existentes
+    db.execute("DELETE FROM lista_atividades WHERE Id_modelo_atividades = ?", (mid,))
+    db.commit()
+
+    # Mapeia sequência → novo ID (para resolver dependências)
+    seq_to_id = {}
+
+    for idx, a in enumerate(atividades, start=1):
+        cur = db.execute("""
+            INSERT INTO lista_atividades
+            (sequencia, Atividade, Dependencia, Responsavel, Duracao, Id_modelo_atividades)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            idx,
+            a.get('Atividade'),
+            None,  # dependência resolvida depois
+            a.get('Responsavel'),
+            int(a.get('Duracao', 1)),
+            mid
+        ))
+        db.commit()
+        seq_to_id[idx] = cur.lastrowid
+
+    # Resolve dependências: sequência → ID do banco
+    for idx, a in enumerate(atividades, start=1):
+        dep_seq = a.get('Dependencia')
+        if dep_seq and int(dep_seq) in seq_to_id:
+            db.execute(
+                "UPDATE lista_atividades SET Dependencia = ? WHERE ID = ?",
+                (seq_to_id[int(dep_seq)], seq_to_id[idx])
+            )
+    db.commit()
+
+    return jsonify({'ok': True, 'count': len(atividades)})

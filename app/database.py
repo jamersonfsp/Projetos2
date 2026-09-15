@@ -85,6 +85,26 @@ CREATE INDEX IF NOT EXISTS idx_ativ_previsao ON atividades(Previsao);
 CREATE INDEX IF NOT EXISTS idx_proj_status   ON projetos(Status);
 CREATE INDEX IF NOT EXISTS idx_cobr_projeto  ON cobranca(Id_projetos);
 CREATE INDEX IF NOT EXISTS idx_atlz_projeto  ON atualizacoes(Id_projetos);
+
+-- Modelos de Atividades
+CREATE TABLE IF NOT EXISTS modelo_atividades (
+    ID    INTEGER PRIMARY KEY AUTOINCREMENT,
+    Nome  TEXT NOT NULL
+);
+
+-- Lista de Atividades dos Modelos
+CREATE TABLE IF NOT EXISTS lista_atividades (
+    ID                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    sequencia             INTEGER,
+    Atividade             TEXT,
+    Dependencia           INTEGER,
+    Responsavel           TEXT,
+    Duracao               INTEGER DEFAULT 1,
+    Id_modelo_atividades  INTEGER NOT NULL,
+    FOREIGN KEY (Id_modelo_atividades) REFERENCES modelo_atividades(ID) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_lista_modelo ON lista_atividades(Id_modelo_atividades);
 """
 
 

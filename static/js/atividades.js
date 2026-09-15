@@ -45,8 +45,25 @@ const AtividadesView = (() => {
 
         dataPretendida = projeto.Previsao || '';
 
+        // Carrega modelos disponíveis
+        let modelos = [];
+        try {
+            modelos = await API.modelos.list();
+        } catch (e) {}
+
         const body = document.createElement('div');
         body.innerHTML = `
+            <div class="modelo-import-bar" id="modeloImportBar">
+                <div class="form-group" style="flex:1;margin-bottom:0">
+                    <label>Importar de Modelo</label>
+                    <select id="fModeloSelect">
+                        <option value="">— Selecione um modelo (opcional) —</option>
+                        ${modelos.map(m => `<option value="${m.ID}">${escapeHtml(m.Nome)}</option>`).join('')}
+                    </select>
+                </div>
+                <button class="btn btn-secondary" id="btnImportarModelo" style="align-self:flex-end">Importar</button>
+            </div>
+
             <div class="data-pretendida">
                 <label>Início do projeto:</label>
                 <strong>${App.fmtDate(projeto.Inicio)}</strong>
@@ -116,6 +133,8 @@ const AtividadesView = (() => {
                 if (onCloseCallback) onCloseCallback();
             }
         });
+
+        document.getElementById('btnImportarModelo').addEventListener('click', () => importarModelo());
 
         // ─── Scroll sincronizado vertical ───
         const leftEl = document.getElementById('ativLeft');
@@ -482,6 +501,71 @@ const AtividadesView = (() => {
         draggedRow = null;
     }
 
+    // ─── Importar atividades de um modelo ───
+    async function importarModelo() {
+        const sel = document.getElementById('fModeloSelect');
+        const modeloId = sel.value;
+        if (!modeloId) {
+            App.toast('Selecione um modelo', 'warning');
+            return;
+        }
+
+        // Verifica se já existem atividades preenchidas
+        const tbody = document.getElementById('ativBody');
+        const existingRows = [...tbody.children].filter(tr => {
+            const inp = tr.querySelector('input[name="Atividade"]');
+            return inp && inp.value.trim();
+        });
+        if (existingRows.length > 0) {
+            if (!App.confirm('Isso substituirá todas as atividades atuais pelas do modelo. Continuar?')) return;
+        }
+
+        try {
+            const modeloAtivs = await API.modelos.getAtividades(modeloId);
+            if (!modeloAtivs.length) {
+                App.toast('O modelo não possui atividades', 'warning');
+                return;
+            }
+
+            // Converte modelo para formato do projeto (calcula datas)
+            // Mapeia sequência do modelo → sequência importada (para dependências)
+            const modeloSeqMap = {};
+            modeloAtivs.forEach((a, idx) => { modeloSeqMap[a.sequencia] = idx + 1; });
+
+            const importadas = modeloAtivs.map((a, idx) => {
+                let depSeq = null;
+                if (a.Dependencia) {
+                    // Busca a sequência da atividade dependência no modelo
+                    const depModelo = modeloAtivs.find(x => x.ID === a.Dependencia);
+                    if (depModelo) depSeq = modeloSeqMap[depModelo.sequencia];
+                }
+                return {
+                    Atividade: a.Atividade,
+                    Responsavel: a.Responsavel || '',
+                    Dependencia: depSeq,
+                    Duracao: a.Duracao || 1,
+                    status: 'Novo',
+                    Sabado: 1,
+                    Domingo: 1,
+                };
+            });
+
+            // Substitui as atividades
+            atividades = importadas;
+            App.clear(tbody);
+            importadas.forEach((a, idx) => {
+                tbody.appendChild(createRow(a, idx + 1));
+            });
+
+            // Recalcula todas as datas em cascata
+            recalcAll();
+
+            App.toast(`${importadas.length} atividades importadas do modelo`, 'success');
+        } catch (e) {
+            App.toast('Erro ao importar: ' + e.message, 'error');
+        }
+    }
+
     // ─── Coleta dados das linhas ───
     function collectRows() {
         const rows = document.querySelectorAll('#ativBody tr');
@@ -807,6 +891,13 @@ const AtividadesView = (() => {
             `${ax},${ay + arrowSize} ${ax - arrowSize / 2},${ay} ${ax + arrowSize / 2},${ay}`);
         head.setAttribute('class', 'dep-arrow-head');
         svg.appendChild(head);
+    }
+
+    function escapeHtml(s) {
+        if (s == null) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
     }
 
     return { openModal };

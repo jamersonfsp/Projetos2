@@ -13,6 +13,7 @@ const App = (() => {
         '/calendario':    { title: 'Calendário',          render: () => App.renderComingSoon() },
         '/responsaveis':  { title: 'Responsáveis',        render: () => ResponsaveisView.render() },
         '/setor':         { title: 'Setor',               render: () => SetorView.render() },
+        '/modelos':       { title: 'Modelos de Atividades', render: () => ModelosView.render() },
     };
 
     function init() {
@@ -80,6 +81,7 @@ const App = (() => {
                 'calendario': '/calendario',
                 'responsaveis': '/responsaveis',
                 'setor': '/setor',
+                'modelos': '/modelos',
             };
             if (routeMap[r] === current) el.classList.add('active');
             // projetos tambem ativa quando estamos em /projeto/:id
