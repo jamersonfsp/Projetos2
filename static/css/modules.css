@@ -28,6 +28,7 @@
 }
 .relatorio-view .motivo-badge.atrasado { background: var(--danger-bg); color: var(--danger); }
 .relatorio-view .motivo-badge.hoje     { background: var(--warning-bg); color: var(--warning); }
+.relatorio-view .motivo-badge.monitoramento { background: #DBEAFE; color: #1E40AF; }
 
 .relatorio-view .dias-neg { color: var(--danger); font-weight: 600; }
 .relatorio-view .dias-zero { color: var(--warning); font-weight: 600; }

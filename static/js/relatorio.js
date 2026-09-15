@@ -42,7 +42,8 @@ const RelatorioView = (() => {
 
             <div class="card mb-3">
                 <p class="text-sm text-muted">
-                    Lista das atividades a tratar no dia: atrasadas, com previsão para hoje, e sem cobrança há mais de 2 dias úteis.
+                    Atividades a tratar no dia: atrasadas, vencendo hoje, sem cobrança há mais de 2 dias úteis, e monitoramento de atividades com previsão entre 15-30 dias sem cobrança recente.
+                    Atividades com dependência não finalizada são excluídas automaticamente.
                 </p>
             </div>
             <div class="table-wrap">
@@ -120,7 +121,7 @@ const RelatorioView = (() => {
         }
         tbody.innerHTML = lista.map(a => {
             const diasCls = a.dias < 0 ? 'dias-neg' : (a.dias === 0 ? 'dias-zero' : '');
-            const motivoCls = a.motivo === 'Atrasada' ? 'atrasado' : (a.motivo === 'Vence hoje' ? 'hoje' : '');
+            const motivoCls = a.motivo === 'Atrasada' ? 'atrasado' : (a.motivo === 'Vence hoje' ? 'hoje' : (a.motivo && a.motivo.startsWith('Monitoramento') ? 'monitoramento' : ''));
             return `
                 <tr>
                     <td><strong>#${a.proj_id}</strong></td>

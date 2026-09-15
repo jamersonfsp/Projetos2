@@ -206,11 +206,17 @@ def calcular_inicio_atividade(dependencia_previsao, projeto_inicio, has_dependen
 def relatorio_diario(db):
     """
     Retorna a lista de atividades a tratar no dia, conforme regras:
-    1. Atrasadas (Novo/Em Andamento, Previsao < hoje) — exclui se tem cobrança de hoje
-    2. No prazo com Previsao = hoje — exclui se tem cobrança de hoje
-    3. No prazo, Previsao > hoje, sem cobrança há mais de 2 dias úteis
-       (desconsiderando sáb/dom).
-    Itens que entram em 1 ou 2 não entram em 3.
+
+    Filtro geral:
+    - Atividades com dependência em atividade NÃO finalizada são excluídas.
+
+    Regras por faixa de dias (Previsao - hoje, em dias corridos):
+    0. Previsão > 30 dias  → NÃO entra na lista.
+    1. Previsão entre 16-30 dias → entra apenas se NÃO houve cobrança nos
+       últimos 15 dias úteis.
+    2. Previsão < 0 (atrasada) → entra, exceto se já cobrada hoje.
+    3. Previsão = 0 (vence hoje) → entra, exceto se já cobrada hoje.
+    4. Previsão 1-15 dias → entra se sem cobrança há >2 dias úteis.
     """
     hoje = today()
     hoje_iso = hoje.isoformat()
@@ -222,6 +228,7 @@ def relatorio_diario(db):
                a.Previsao      AS ativ_previsao,
                a.Responsavel   AS ativ_responsavel,
                a.sequencia     AS sequencia,
+               a.Dependencia   AS ativ_dep_id,
                p.ID            AS proj_id,
                p.Titulo        AS proj_titulo,
                p.Responsavel   AS proj_responsavel,
@@ -242,33 +249,59 @@ def relatorio_diario(db):
         if not prev:
             continue
 
-        motivo = None
+        dias_corridos = (prev - hoje).days
 
-        # Item 1: Atrasada — exclui se já tem cobrança registrada hoje
-        if prev < hoje:
-            cob = parse_date(r['proj_cobranca'])
+        # ── Filtro 0: Previsão > 30 dias → não entra ──
+        if dias_corridos > 30:
+            continue
+
+        # ── Filtro: dependência não finalizada → não entra ──
+        if r['ativ_dep_id']:
+            dep = db.execute(
+                "SELECT status FROM atividades WHERE ID = ?",
+                (r['ativ_dep_id'],)
+            ).fetchone()
+            if dep and dep['status'] != 'Finalizado':
+                continue
+
+        motivo = None
+        cob = parse_date(r['proj_cobranca'])
+
+        # ── Faixa 16-30 dias: entra só se sem cobrança nos últimos 15 dias úteis ──
+        if 16 <= dias_corridos <= 30:
+            if cob:
+                dias_uteis_desde_cob = business_days_between(
+                    cob, hoje, skip_saturday=True, skip_sunday=True
+                )
+                if dias_uteis_desde_cob <= 15:
+                    continue  # cobrança recente, não entra
+            motivo = 'Monitoramento (+15 dias)'
+
+        # ── Atrasada (previsão < hoje) ──
+        elif dias_corridos < 0:
             if cob and cob == hoje:
-                continue  # já foi cobrado hoje, sai da lista
+                continue  # já cobrada hoje
             motivo = 'Atrasada'
-        # Item 2: Previsao = hoje — exclui se já tem cobrança registrada hoje
-        elif prev == hoje:
-            cob = parse_date(r['proj_cobranca'])
+
+        # ── Vence hoje ──
+        elif dias_corridos == 0:
             if cob and cob == hoje:
-                continue  # já foi cobrado hoje, sai da lista
+                continue  # já cobrada hoje
             motivo = 'Vence hoje'
-        # Item 3: sem cobrança há >2 dias úteis
+
+        # ── 1 a 15 dias: regra de 2 dias úteis ──
         else:
-            cob = parse_date(r['proj_cobranca'])
             if cob is None:
                 motivo = 'Sem cobrança registrada'
             else:
-                dias_uteis = business_days_between(cob, hoje, skip_saturday=True, skip_sunday=True)
+                dias_uteis = business_days_between(
+                    cob, hoje, skip_saturday=True, skip_sunday=True
+                )
                 if dias_uteis > 2:
                     motivo = f'Sem cobrança há {dias_uteis} dias úteis'
                 else:
-                    continue  # não entra na lista
+                    continue  # cobrança recente, não entra
 
-        dias = (prev - hoje).days
         lista.append({
             'ativ_id': r['ativ_id'],
             'proj_id': r['proj_id'],
@@ -278,7 +311,7 @@ def relatorio_diario(db):
             'ativ_previsao': r['ativ_previsao'],
             'ativ_previsao_br': format_date_br(r['ativ_previsao']),
             'ativ_responsavel': r['ativ_responsavel'],
-            'dias': dias,
+            'dias': dias_corridos,
             'motivo': motivo,
         })
 
