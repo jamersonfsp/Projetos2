@@ -278,12 +278,19 @@ def create_atividade(pid):
     skip_sat = bool(data.get('Sabado', 1))
     skip_sun = bool(data.get('Domingo', 1))
 
-    # Se tem dependência, calcular inicio a partir da previsão da dependência
-    dep_id = data.get('Dependencia')
-    if dep_id:
-        dep = db.execute("SELECT Previsao FROM atividades WHERE ID = ?", (dep_id,)).fetchone()
-        if dep and dep['Previsao']:
-            inicio = B.next_business_day(dep['Previsao'], skip_sat, skip_sun).isoformat()
+    # Se tem dependência (sequência), calcular inicio a partir da previsão da dependência
+    dep_seq = data.get('Dependencia')
+    dep_db_id = None
+    if dep_seq:
+        # Busca a atividade dependência pelo número de sequência
+        dep = db.execute(
+            "SELECT ID, Previsao FROM atividades WHERE Id_projetos = ? AND sequencia = ?",
+            (pid, dep_seq)
+        ).fetchone()
+        if dep:
+            dep_db_id = dep['ID']
+            if dep['Previsao']:
+                inicio = B.next_business_day(dep['Previsao'], skip_sat, skip_sun).isoformat()
     else:
         # Se não tem dependência, usar inicio do projeto
         if not inicio:
@@ -311,7 +318,7 @@ def create_atividade(pid):
          Previsao, Duracao, status, Finalizacao, Status_Finalizacao, Sabado, Domingo)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        pid, seq, data.get('Atividade'), data.get('Responsavel'), dep_id,
+        pid, seq, data.get('Atividade'), data.get('Responsavel'), dep_db_id,
         inicio, previsao, duracao, data.get('status', 'Novo'),
         data.get('Finalizacao'), data.get('Status_Finalizacao'),
         1 if skip_sat else 0, 1 if skip_sun else 0
@@ -327,41 +334,83 @@ def create_atividade(pid):
 
 @api_bp.route('/projetos/<int:pid>/atividades/batch', methods=['POST'])
 def batch_atividades(pid):
-    """Substitui todas as atividades de um projeto pela lista enviada."""
+    """Substitui todas as atividades de um projeto pela lista enviada.
+    Atividades finalizadas já existentes são preservadas (não duplicadas).
+    Dependências são resolvidas por número de sequência (não por ID do banco).
+    Datas de atividades dependentes são recalculadas em cascata.
+    """
     data = request.get_json()
     atividades = data.get('atividades', [])
     db = get_db()
-
-    # Apaga as existentes (não-finalizadas)
-    db.execute("DELETE FROM atividades WHERE Id_projetos = ? AND status != 'Finalizado'", (pid,))
-    db.commit()
 
     # Busca projeto para inicio
     proj = db.execute("SELECT * FROM projetos WHERE ID = ?", (pid,)).fetchone()
     if not proj:
         return jsonify({'error': 'Projeto não encontrado'}), 404
 
-    # Mapeia IDs antigos de dependência para novos (quando recria)
-    id_map = {}
+    # 1) Coleta IDs de atividades finalizadas já existentes no banco
+    finalizadas_existentes = db.execute(
+        "SELECT ID FROM atividades WHERE Id_projetos = ? AND status = 'Finalizado'",
+        (pid,)
+    ).fetchall()
+    ids_finalizadas = {row['ID'] for row in finalizadas_existentes}
+
+    # 2) Coleta IDs de atividades finalizadas que vêm do cliente
+    ids_finalizadas_cliente = set()
+    for a in atividades:
+        if a.get('status') == 'Finalizado' and a.get('ID'):
+            try:
+                ids_finalizadas_cliente.add(int(a['ID']))
+            except (ValueError, TypeError):
+                pass
+
+    # 3) Remove atividades NÃO finalizadas (serão recriadas)
+    db.execute("DELETE FROM atividades WHERE Id_projetos = ? AND status != 'Finalizado'", (pid,))
+
+    # 4) Remove finalizadas que NÃO estão na lista do cliente (foram removidas pelo usuário)
+    for fid in ids_finalizadas:
+        if fid not in ids_finalizadas_cliente:
+            db.execute("DELETE FROM atividades WHERE ID = ?", (fid,))
+    db.commit()
+
+    # Mapeamento: sequência → novo ID do banco
+    seq_to_id = {}
 
     for idx, a in enumerate(atividades, start=1):
         skip_sat = bool(a.get('Sabado', 1))
         skip_sun = bool(a.get('Domingo', 1))
         duracao = int(a.get('Duracao', 1))
 
-        # Dependência (pode ser ID antigo ou sequencia)
-        dep_id = None
-        dep_seq = a.get('Dependencia')
-        if dep_seq and dep_seq in id_map:
-            dep_id = id_map[dep_seq]
+        # Verifica se é uma atividade finalizada que já existe no banco
+        if a.get('status') == 'Finalizado' and a.get('ID'):
+            try:
+                existing_id = int(a['ID'])
+            except (ValueError, TypeError):
+                existing_id = None
+            if existing_id and existing_id in ids_finalizadas:
+                # Já existe no banco — apenas atualiza campos não-sensíveis,
+                # preservando Finalizacao e Status_Finalizacao
+                db.execute("""
+                    UPDATE atividades SET
+                        sequencia = ?, Atividade = ?, Responsavel = ?,
+                        Dependencia = ?, Inicio = ?, Previsao = ?,
+                        Duracao = ?, Sabado = ?, Domingo = ?
+                    WHERE ID = ?
+                """, (
+                    idx, a.get('Atividade'), a.get('Responsavel'),
+                    None,  # dependência será resolvida depois
+                    a.get('Inicio'), a.get('Previsao'),
+                    duracao, 1 if skip_sat else 0, 1 if skip_sun else 0,
+                    existing_id
+                ))
+                seq_to_id[idx] = existing_id
+                continue
 
-        # Inicio
+        # Atividade não-finalizada ou finalizada nova → INSERT
+
+        # Inicio (sem dependência por agora, será recalculado na cascata)
         inicio = a.get('Inicio')
-        if dep_id:
-            dep = db.execute("SELECT Previsao FROM atividades WHERE ID = ?", (dep_id,)).fetchone()
-            if dep and dep['Previsao']:
-                inicio = B.next_business_day(dep['Previsao'], skip_sat, skip_sun).isoformat()
-        elif not inicio:
+        if not inicio:
             inicio = proj['Inicio']
 
         # Previsao
@@ -375,16 +424,49 @@ def batch_atividades(pid):
              Previsao, Duracao, status, Finalizacao, Status_Finalizacao, Sabado, Domingo)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            pid, idx, a.get('Atividade'), a.get('Responsavel'), dep_id,
+            pid, idx, a.get('Atividade'), a.get('Responsavel'), None,
             inicio, previsao, duracao, a.get('status', 'Novo'),
             a.get('Finalizacao'), a.get('Status_Finalizacao'),
             1 if skip_sat else 0, 1 if skip_sun else 0
         ))
         db.commit()
-        # Mapeia sequencia -> novo ID
-        id_map[idx] = cur.lastrowid
+        seq_to_id[idx] = cur.lastrowid
 
-    # Atualiza Dependencia com os novos IDs (já foi feito acima via id_map)
+    # 5) Resolve dependências: sequência → ID do banco
+    for idx, a in enumerate(atividades, start=1):
+        dep_seq = a.get('Dependencia')
+        if dep_seq and dep_seq in seq_to_id:
+            dep_db_id = seq_to_id[dep_seq]
+            db.execute("UPDATE atividades SET Dependencia = ? WHERE ID = ?",
+                       (dep_db_id, seq_to_id[idx]))
+    db.commit()
+
+    # 6) Cascata de datas: recalcula Inicio/Previsao de atividades dependentes
+    # Ordena por sequência para processar na ordem correta
+    all_ativs = db.execute(
+        "SELECT * FROM atividades WHERE Id_projetos = ? ORDER BY sequencia", (pid,)
+    ).fetchall()
+
+    for a in all_ativs:
+        if a['Dependencia']:
+            dep = db.execute("SELECT Previsao FROM atividades WHERE ID = ?",
+                             (a['Dependencia'],)).fetchone()
+            if dep and dep['Previsao']:
+                new_inicio = B.next_business_day(
+                    dep['Previsao'],
+                    bool(a['Sabado']),
+                    bool(a['Domingo'])
+                ).isoformat()
+                if new_inicio != a['Inicio']:
+                    new_previsao = B.calcular_previsao_atividade(
+                        new_inicio, a['Duracao'] or 1,
+                        bool(a['Sabado']), bool(a['Domingo'])
+                    )
+                    db.execute(
+                        "UPDATE atividades SET Inicio = ?, Previsao = ? WHERE ID = ?",
+                        (new_inicio, new_previsao, a['ID'])
+                    )
+    db.commit()
 
     # Recalcula previsão do projeto
     B.recalcular_previsao_projeto(db, pid)

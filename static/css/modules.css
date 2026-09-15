@@ -124,6 +124,8 @@
 .ativ-left table.ativ-table .btn-del:hover { background: var(--danger-bg); }
 .ativ-left table.ativ-table tr.dragging { opacity: 0.4; }
 .ativ-left table.ativ-table tr.drag-over { border-top: 2px solid var(--primary); }
+.ativ-left table.ativ-table tr.row-finalizado { background: #F0FDF4; opacity: 0.85; }
+.ativ-left table.ativ-table tr.row-finalizado td { color: #6B7280; }
 
 /* Lado direito: Gantt */
 .ativ-right {

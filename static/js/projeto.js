@@ -298,6 +298,11 @@ const ProjetoView = (() => {
             const atividades = data.atividades;
             const atualizacoes = data.atualizacoes;
 
+            // Mapa: ID da atividade → número de sequência (para exibir dependência)
+            const idToSeq = {};
+            atividades.forEach(a => { idToSeq[a.ID] = a.sequencia; });
+            const depLabel = (depId) => depId ? (idToSeq[depId] || depId) : '—';
+
             view.innerHTML = `
                 <div class="page-header">
                     <h2>Tela do Projeto</h2>
@@ -378,7 +383,7 @@ const ProjetoView = (() => {
                                                 <td>${a.sequencia}</td>
                                                 <td>${escapeHtml(a.Atividade || '')}</td>
                                                 <td>${a.Responsavel || '—'}</td>
-                                                <td>${a.Dependencia || '—'}</td>
+                                                <td>${depLabel(a.Dependencia)}</td>
                                                 <td>${App.fmtDate(a.Inicio)}</td>
                                                 <td>${App.fmtDate(a.Previsao)}</td>
                                                 <td>${a.Duracao || 1}</td>
@@ -411,7 +416,12 @@ const ProjetoView = (() => {
 
                     <!-- Coluna direita: atualizações -->
                     <div class="card">
-                        <div class="card-header"><h3>Atualizações</h3></div>
+                        <div class="card-header">
+                            <h3>Atualizações</h3>
+                            <div class="actions">
+                                <button class="btn btn-sm btn-secondary" id="btnVerAtualizacoes" title="Ver atualizações em tela cheia">📋 Ver tudo</button>
+                            </div>
+                        </div>
                         <div class="notes-box" id="atualizacoesBox">
                             ${atualizacoes.length ? atualizacoes.map(a => `<div class="note-entry"><span class="note-date">${App.fmtDate(a.Data)}</span><span class="note-text">${escapeHtml(a.Observacao || '')}</span></div>`).join('') : '<div class="text-muted">Sem atualizações registradas.</div>'}
                         </div>
@@ -429,6 +439,7 @@ const ProjetoView = (() => {
             document.getElementById('btnEsquema').addEventListener('click', () => {
                 AtividadesView.openModal(pid, () => renderTela(pid));
             });
+            document.getElementById('btnVerAtualizacoes').addEventListener('click', () => verAtualizacoes(pid));
             document.getElementById('btnAnalise').addEventListener('click', () => analise(pid));
             document.getElementById('btnFinalizar').addEventListener('click', () => finalizar(pid));
             document.getElementById('btnCobranca').addEventListener('click', () => cobranca(pid));
@@ -745,6 +756,33 @@ const ProjetoView = (() => {
         });
     }
 
+    // ─── VER ATUALIZAÇÕES (popup) ───
+    async function verAtualizacoes(pid) {
+        try {
+            const data = await API.projetos.get(pid);
+            const atualizacoes = data.atualizacoes || [];
+            const html = atualizacoes.length
+                ? atualizacoes.map(a => `
+                    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+                        <strong style="color:var(--primary);font-size:12px">${App.fmtDate(a.Data)}</strong>
+                        <p style="margin:4px 0 0;padding-left:8px;font-size:13px">${escapeHtml(a.Observacao || '')}</p>
+                    </div>
+                `).join('')
+                : '<p class="text-muted">Sem atualizações registradas.</p>';
+
+            App.modal({
+                title: 'Atualizações do Projeto',
+                size: 'lg',
+                body: `<div style="max-height:60vh;overflow-y:auto">${html}</div>`,
+                footer: [
+                    App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Fechar'),
+                ]
+            });
+        } catch (e) {
+            App.toast('Erro ao carregar atualizações: ' + e.message, 'error');
+        }
+    }
+
     function escapeHtml(s) {
         if (s == null) return '';
         const d = document.createElement('div');
@@ -752,5 +790,5 @@ const ProjetoView = (() => {
         return d.innerHTML;
     }
 
-    return { renderCadastro, renderLista, renderTela, finalizarAtividade };
+    return { renderCadastro, renderLista, renderTela, finalizarAtividade, verAtualizacoes };
 })();

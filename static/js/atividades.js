@@ -151,10 +151,19 @@ const AtividadesView = (() => {
         });
     }
 
+    // ─── Converte DB ID de dependência para número de sequência ───
+    function depIdToSeq(depId) {
+        if (!depId) return '';
+        const found = atividades.find(a => String(a.ID) === String(depId));
+        return found ? found.sequencia : '';
+    }
+
     // ─── Cria uma linha da tabela ───
     function createRow(a, seq) {
-        const tr = App.el('tr', { 'data-seq': seq, draggable: 'true' });
+        const isFinalizado = a.status === 'Finalizado';
+        const tr = App.el('tr', { 'data-seq': seq, draggable: isFinalizado ? 'false' : 'true' });
         tr.dataset.ativId = a.ID || '';
+        if (isFinalizado) tr.classList.add('row-finalizado');
 
         // Num
         tr.appendChild(App.el('td', { class: 'row-num' }, String(seq)));
@@ -163,13 +172,14 @@ const AtividadesView = (() => {
         const tdAtiv = App.el('td', { class: 'col-ativ' });
         tdAtiv.appendChild(App.el('input', {
             type: 'text', name: 'Atividade',
-            value: a.Atividade || '', placeholder: 'Descrição'
+            value: a.Atividade || '', placeholder: 'Descrição',
+            ...(isFinalizado ? { disabled: 'disabled' } : {})
         }));
         tr.appendChild(tdAtiv);
 
         // Responsável
         const tdResp = App.el('td', { class: 'col-resp' });
-        const selResp = App.el('select', { name: 'Responsavel' });
+        const selResp = App.el('select', { name: 'Responsavel', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
         selResp.appendChild(App.el('option', { value: '' }, '—'));
         responsaveis.forEach(r => {
             const o = App.el('option', { value: r.Nome }, r.Nome);
@@ -181,14 +191,16 @@ const AtividadesView = (() => {
 
         // Dependência — agora construído a partir do DOM (linhas existentes)
         const tdDep = App.el('td', { class: 'col-dep' });
-        const selDep = buildDepSelect(seq, a.Dependencia);
+        const selDep = buildDepSelect(seq, depIdToSeq(a.Dependencia) || null);
+        if (isFinalizado) selDep.disabled = true;
         tdDep.appendChild(selDep);
         tr.appendChild(tdDep);
 
         // Início
         const tdIni = App.el('td', { class: 'col-ini' });
         const inpIni = App.el('input', {
-            type: 'date', name: 'Inicio', value: a.Inicio || ''
+            type: 'date', name: 'Inicio', value: a.Inicio || '',
+            ...(isFinalizado ? { disabled: 'disabled' } : {})
         });
         tdIni.appendChild(inpIni);
         tr.appendChild(tdIni);
@@ -197,7 +209,8 @@ const AtividadesView = (() => {
         const tdDur = App.el('td', { class: 'col-dur' });
         const inpDur = App.el('input', {
             type: 'number', name: 'Duracao', min: '1',
-            value: String(a.Duracao || 1)
+            value: String(a.Duracao || 1),
+            ...(isFinalizado ? { disabled: 'disabled' } : {})
         });
         tdDur.appendChild(inpDur);
         tr.appendChild(tdDur);
@@ -213,7 +226,7 @@ const AtividadesView = (() => {
 
         // Status
         const tdSt = App.el('td', { class: 'col-status' });
-        const selSt = App.el('select', { name: 'status' });
+        const selSt = App.el('select', { name: 'status', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
         ['Novo', 'Em Andamento', 'Finalizado'].forEach(s => {
             const o = App.el('option', { value: s }, s);
             if ((a.status || 'Novo') === s) o.selected = true;
@@ -224,29 +237,33 @@ const AtividadesView = (() => {
 
         // Sábado
         const tdSab = App.el('td', { class: 'col-chk' });
-        const chkSab = App.el('input', { type: 'checkbox', name: 'Sabado' });
+        const chkSab = App.el('input', { type: 'checkbox', name: 'Sabado', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
         chkSab.checked = a.Sabado !== 0;
         tdSab.appendChild(chkSab);
         tr.appendChild(tdSab);
 
         // Domingo
         const tdDom = App.el('td', { class: 'col-chk' });
-        const chkDom = App.el('input', { type: 'checkbox', name: 'Domingo' });
+        const chkDom = App.el('input', { type: 'checkbox', name: 'Domingo', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
         chkDom.checked = a.Domingo !== 0;
         tdDom.appendChild(chkDom);
         tr.appendChild(tdDom);
 
-        // Excluir
+        // Excluir (oculto para finalizadas)
         const tdDel = App.el('td', { class: 'col-act' });
-        const btnDel = App.el('button', { class: 'btn-del', title: 'Excluir' }, '✕');
-        btnDel.addEventListener('click', () => {
-            if (App.confirm('Excluir esta atividade?')) {
-                tr.remove();
-                renumberRows();
-                recalcAll();
-            }
-        });
-        tdDel.appendChild(btnDel);
+        if (!isFinalizado) {
+            const btnDel = App.el('button', { class: 'btn-del', title: 'Excluir' }, '✕');
+            btnDel.addEventListener('click', () => {
+                if (App.confirm('Excluir esta atividade?')) {
+                    tr.remove();
+                    renumberRows();
+                    recalcAll();
+                }
+            });
+            tdDel.appendChild(btnDel);
+        } else {
+            tdDel.innerHTML = '<span class="badge badge-success" style="font-size:10px">OK</span>';
+        }
         tr.appendChild(tdDel);
 
         // ─── Listeners para recalcular ───
@@ -339,6 +356,8 @@ const AtividadesView = (() => {
             const oldSel = tr.querySelector('select[name="Dependencia"]');
             const currentVal = oldSel.value;
             const newSel = buildDepSelect(newSeq, currentVal ? parseInt(currentVal) : null);
+            // Preserva estado read-only para atividades finalizadas
+            if (tr.classList.contains('row-finalizado')) newSel.disabled = true;
             tdDep.replaceChild(newSel, oldSel);
 
             // Re-bind listener
@@ -397,6 +416,27 @@ const AtividadesView = (() => {
         }
 
         renderGantt();
+
+        // Cascata: recalcula atividades que dependem desta
+        cascadeDependents(seq);
+    }
+
+    // ─── Cascata: recalcula todas as atividades dependentes de uma sequência ───
+    function cascadeDependents(changedSeq) {
+        const allRows = [...document.querySelectorAll('#ativBody tr')];
+        // Coleta sequências que dependem da alterada
+        const dependents = [];
+        allRows.forEach(tr => {
+            const depVal = tr.querySelector('select[name="Dependencia"]')?.value;
+            if (depVal && parseInt(depVal) === changedSeq) {
+                dependents.push(parseInt(tr.dataset.seq));
+            }
+        });
+        // Recalcula cada dependente e propaga adiante
+        dependents.forEach(depSeq => {
+            const depRow = allRows.find(r => parseInt(r.dataset.seq) === depSeq);
+            if (depRow) recalcRow(depRow);
+        });
     }
 
     function recalcAll() {
