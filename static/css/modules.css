@@ -152,46 +152,64 @@
     min-width: fit-content;
 }
 
-/* Data pretendida */
-.data-pretendida {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* Header bar unificada (inicio + pretendida + modelo) */
+.ativ-header-bar {
     padding: 10px 14px;
     background: var(--primary-lighter);
-    border-radius: var(--radius);
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-}
-.data-pretendida label {
-    font-size: 12.5px;
-    color: var(--text);
-    font-weight: 500;
-}
-.data-pretendida input[type="date"] {
-    width: auto;
-}
-
-/* ─── Modelo de importação ─── */
-.modelo-import-bar {
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
-    padding: 10px 14px;
-    background: #EFF6FF;
-    border: 1px solid #BFDBFE;
+    border: 1px solid var(--border);
     border-radius: var(--radius);
     margin-bottom: 10px;
+    transition: max-height 0.3s ease, padding 0.3s ease, margin 0.3s ease;
+    overflow: hidden;
+    max-height: 80px;
 }
-.modelo-import-bar label {
-    font-size: 12.5px;
-    color: var(--text);
+.ativ-header-bar.collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-width: 0;
+}
+.ativ-header-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.ativ-header-row .form-group {
+    margin-bottom: 0;
+    min-width: 0;
+}
+.ativ-header-row label {
+    font-size: 11.5px;
+    color: var(--text-secondary);
     font-weight: 500;
+    display: block;
+    margin-bottom: 3px;
 }
-.modelo-import-bar select {
-    width: 100%;
-    max-width: 360px;
+.ativ-header-row strong {
+    display: block;
+    padding: 6px 0;
+    font-size: 13px;
 }
+.ativ-header-row select,
+.ativ-header-row input[type="date"] {
+    padding: 6px 8px;
+    font-size: 12.5px;
+}
+.btn-icon-sm {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 5px 7px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+.btn-icon-sm:hover { background: var(--primary-lighter); }
+.btn-icon-sm svg { transition: transform 0.3s ease; }
 
 /* ─── Modelos view ─── */
 .modelo-selector {

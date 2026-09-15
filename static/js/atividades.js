@@ -53,22 +53,28 @@ const AtividadesView = (() => {
 
         const body = document.createElement('div');
         body.innerHTML = `
-            <div class="modelo-import-bar" id="modeloImportBar">
-                <div class="form-group" style="flex:1;margin-bottom:0">
-                    <label>Importar de Modelo</label>
-                    <select id="fModeloSelect">
-                        <option value="">— Selecione um modelo (opcional) —</option>
-                        ${modelos.map(m => `<option value="${m.ID}">${escapeHtml(m.Nome)}</option>`).join('')}
-                    </select>
+            <div class="ativ-header-bar" id="ativHeaderBar">
+                <div class="ativ-header-row">
+                    <div class="form-group">
+                        <label>Início do projeto</label>
+                        <strong>${App.fmtDate(projeto.Inicio)}</strong>
+                    </div>
+                    <div class="form-group">
+                        <label>Data pretendida</label>
+                        <input type="date" id="fDataPretendida" value="${dataPretendida}">
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label>Importar de Modelo</label>
+                        <select id="fModeloSelect">
+                            <option value="">— Nenhum —</option>
+                            ${modelos.map(m => `<option value="${m.ID}">${escapeHtml(m.Nome)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <button class="btn btn-secondary" id="btnImportarModelo">Importar</button>
+                    <button class="btn-icon-sm" id="btnToggleHeader" title="Recolher/Expandir">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
                 </div>
-                <button class="btn btn-secondary" id="btnImportarModelo" style="align-self:flex-end">Importar</button>
-            </div>
-
-            <div class="data-pretendida">
-                <label>Início do projeto:</label>
-                <strong>${App.fmtDate(projeto.Inicio)}</strong>
-                <label style="margin-left:14px">Data pretendida para finalização:</label>
-                <input type="date" id="fDataPretendida" value="${dataPretendida}">
             </div>
 
             <div class="atividades-side-by-side" id="ativSideBySide">
@@ -135,6 +141,14 @@ const AtividadesView = (() => {
         });
 
         document.getElementById('btnImportarModelo').addEventListener('click', () => importarModelo());
+
+        // Toggle header collapse
+        document.getElementById('btnToggleHeader').addEventListener('click', () => {
+            const bar = document.getElementById('ativHeaderBar');
+            bar.classList.toggle('collapsed');
+            const svg = bar.querySelector('#btnToggleHeader svg');
+            svg.style.transform = bar.classList.contains('collapsed') ? 'rotate(-90deg)' : '';
+        });
 
         // ─── Scroll sincronizado vertical ───
         const leftEl = document.getElementById('ativLeft');
