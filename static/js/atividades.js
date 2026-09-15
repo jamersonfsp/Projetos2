@@ -224,7 +224,7 @@ const AtividadesView = (() => {
 
         // Dependência — agora construído a partir do DOM (linhas existentes)
         const tdDep = App.el('td', { class: 'col-dep' });
-        const selDep = buildDepSelect(seq, depIdToSeq(a.Dependencia) || null);
+        const selDep = buildDepSelect(seq, depIdToSeq(a.Dependencia) || null, !!a.ID);
         if (isFinalizado) selDep.disabled = true;
         tdDep.appendChild(selDep);
         tr.appendChild(tdDep);
@@ -327,7 +327,7 @@ const AtividadesView = (() => {
     }
 
     // ─── Monta o <select> de dependência a partir das linhas do DOM ───
-    function buildDepSelect(currentSeq, selectedDep) {
+    function buildDepSelect(currentSeq, selectedDep, isLoaded) {
         const selDep = App.el('select', { name: 'Dependencia' });
         selDep.appendChild(App.el('option', { value: '' }, '—'));
 
@@ -345,10 +345,10 @@ const AtividadesView = (() => {
 
                 const o = App.el('option', { value: String(otherSeq) }, label);
 
-                // Seleção: dependência salva OU atividade anterior por padrão
+                // Seleção: dependência salva OU atividade anterior por padrão (apenas para novas)
                 if (selectedDep && String(selectedDep) === String(otherSeq)) {
                     o.selected = true;
-                } else if (!selectedDep && otherSeq === (currentSeq - 1) && currentSeq > 1) {
+                } else if (!selectedDep && !isLoaded && otherSeq === (currentSeq - 1) && currentSeq > 1) {
                     o.selected = true;
                 }
 
@@ -388,7 +388,8 @@ const AtividadesView = (() => {
             const tdDep = tr.querySelector('td.col-dep');
             const oldSel = tr.querySelector('select[name="Dependencia"]');
             const currentVal = oldSel.value;
-            const newSel = buildDepSelect(newSeq, currentVal ? parseInt(currentVal) : null);
+            const isLoaded = !!tr.dataset.ativId;
+            const newSel = buildDepSelect(newSeq, currentVal ? parseInt(currentVal) : null, isLoaded);
             // Preserva estado read-only para atividades finalizadas
             if (tr.classList.contains('row-finalizado')) newSel.disabled = true;
             tdDep.replaceChild(newSel, oldSel);
