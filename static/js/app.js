@@ -14,6 +14,7 @@ const App = (() => {
         '/responsaveis':  { title: 'Responsáveis',        render: () => ResponsaveisView.render() },
         '/setor':         { title: 'Setor',               render: () => SetorView.render() },
         '/modelos':       { title: 'Modelos de Atividades', render: () => ModelosView.render() },
+        '/configuracoes': { title: 'Configurações',         render: () => ConfigView.render() },
     };
 
     function init() {
@@ -82,6 +83,7 @@ const App = (() => {
                 'responsaveis': '/responsaveis',
                 'setor': '/setor',
                 'modelos': '/modelos',
+                'configuracoes': '/configuracoes',
             };
             if (routeMap[r] === current) el.classList.add('active');
             // projetos tambem ativa quando estamos em /projeto/:id

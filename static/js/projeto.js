@@ -477,7 +477,8 @@ const ProjetoView = (() => {
                             <button class="btn btn-secondary" id="btnPausar">Pausar</button>
                             <button class="btn btn-warning" id="btnCancelar">Cancelar</button>
                             <button class="btn btn-danger" id="btnExcluir">Excluir Projeto</button>
-                            <button class="btn btn-primary" id="btnExportPdf" style="margin-left:auto;background:#E7D264;color:#1a1a1a;border-color:#E7D264;">📄 Exportar PDF</button>
+                            <button class="btn btn-primary" id="btnEnviarEmail" style="margin-left:auto;background:#0078D4;color:#fff;border-color:#0078D4;">📧 Enviar E-mail</button>
+                            <button class="btn btn-primary" id="btnExportPdf" style="background:#E7D264;color:#1a1a1a;border-color:#E7D264;">📄 Exportar PDF</button>
                         </div>
                     </div>
 
@@ -515,6 +516,7 @@ const ProjetoView = (() => {
             document.getElementById('btnCancelar').addEventListener('click', () => cancelar(pid));
             document.getElementById('btnExcluir').addEventListener('click', () => excluir(pid));
             document.getElementById('btnExportPdf').addEventListener('click', () => exportPdf(pid));
+            document.getElementById('btnEnviarEmail').addEventListener('click', () => enviarEmail(pid));
 
         } catch (e) {
             view.innerHTML = `<div class="empty-state"><h3>Erro</h3><p>${e.message}</p></div>`;
@@ -856,6 +858,254 @@ const ProjetoView = (() => {
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    // ─── ENVIAR EMAIL ───
+    async function enviarEmail(pid) {
+        // Verifica se email está configurado
+        let emailCfg;
+        try {
+            emailCfg = await API.emailConfig.get();
+        } catch (e) {
+            App.toast('Erro ao verificar configuração de e-mail', 'error');
+            return;
+        }
+
+        if (!emailCfg.configured) {
+            App.toast('Configure o e-mail em Configurações > E-mail antes de enviar.', 'warning');
+            return;
+        }
+
+        // Busca dados do projeto para mostrar destinatários
+        let projetoData;
+        try {
+            projetoData = await API.projetos.get(pid);
+        } catch (e) {
+            App.toast('Erro ao carregar projeto', 'error');
+            return;
+        }
+
+        // Coleta responsáveis únicos
+        const respSet = new Set();
+        if (projetoData.projeto.Responsavel) respSet.add(projetoData.projeto.Responsavel);
+        (projetoData.atividades || []).forEach(a => { if (a.Responsavel) respSet.add(a.Responsavel); });
+        const respList = [...respSet].join(', ') || 'Nenhum responsável definido';
+
+        const m = App.modal({
+            title: 'Enviar E-mail de Abertura do Projeto',
+            size: 'md',
+            body: `
+                <div class="mb-3">
+                    <p class="text-sm text-muted mb-2">O e-mail será enviado para todos os responsáveis cadastrados no projeto e nas atividades que possuírem e-mail:</p>
+                    <div style="background:#f0f4ff;border:1px solid #bdd0ff;border-radius:6px;padding:10px 14px;font-size:13px;margin-bottom:14px">
+                        <strong>Responsáveis envolvidos:</strong> ${escapeHtml(respList)}
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+                        <input type="checkbox" id="fEmailGantt" style="width:auto">
+                        Incluir gráfico de Gantt como anexo (PNG)
+                    </label>
+                    <p class="text-sm text-muted" style="margin-left:26px;margin-top:4px">O Gantt será gerado a partir das atividades atuais do projeto.</p>
+                </div>
+
+                <div class="warning-box" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">
+                    <p style="margin:0;font-size:12.5px">⚠️ Certifique-se de que os responsáveis possuem e-mail cadastrado na tela de <strong>Responsáveis</strong>. Responsáveis sem e-mail serão ignorados.</p>
+                </div>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Cancelar'),
+                App.el('button', { class: 'btn btn-primary', id: 'btnConfirmEmail', style: 'background:#0078D4;border-color:#0078D4' }, '📧 Enviar E-mail'),
+            ]
+        });
+
+        document.getElementById('btnConfirmEmail').addEventListener('click', async () => {
+            const incluirGantt = document.getElementById('fEmailGantt').checked;
+            const btn = document.getElementById('btnConfirmEmail');
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+
+            let ganttImage = null;
+            if (incluirGantt) {
+                btn.textContent = 'Gerando Gantt...';
+                ganttImage = await captureGanttForEmail();
+                if (!ganttImage) {
+                    App.toast('Não foi possível gerar o Gantt. Envie sem o anexo ou abra o Gantt primeiro.', 'warning');
+                    btn.disabled = false;
+                    btn.textContent = '📧 Enviar E-mail';
+                    return;
+                }
+            }
+
+            try {
+                const result = await API.enviarEmail(pid, {
+                    incluir_gantt: incluirGantt,
+                    gantt_image: ganttImage,
+                });
+
+                App.toast(result.message || 'E-mail enviado com sucesso!', 'success');
+                m.close();
+                // Recarrega a tela para mostrar a atualização
+                renderTela(pid);
+            } catch (e) {
+                App.toast('Erro: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.textContent = '📧 Enviar E-mail';
+            }
+        });
+    }
+
+    // Gera o Gantt SVG como base64 PNG para anexo de email
+    function captureGanttForEmail() {
+        try {
+            // Cria container oculto para renderizar o Gantt
+            const hidden = document.createElement('div');
+            hidden.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden';
+            document.body.appendChild(hidden);
+
+            // Coleta as linhas de atividades da tabela na tela
+            const table = document.getElementById('ativTable');
+            if (!table) { document.body.removeChild(hidden); return null; }
+
+            const rows = [...table.querySelectorAll('tbody tr')];
+            if (!rows.length) { document.body.removeChild(hidden); return null; }
+
+            // Gera SVG usando mesma lógica do Gantt
+            const ativData = rows.map((tr, i) => {
+                const tds = tr.querySelectorAll('td');
+                return {
+                    seq: i + 1,
+                    atividade: tds[1]?.textContent?.trim() || '',
+                    responsavel: tds[2]?.textContent?.trim() || '',
+                    inicio: tds[4]?.textContent?.trim() || '',
+                    previsao: tds[5]?.textContent?.trim() || '',
+                    status: tds[7]?.textContent?.trim() || 'Novo',
+                };
+            });
+
+            // Converte datas DD/MM/YYYY para YYYY-MM-DD
+            function parseBrDate(s) {
+                if (!s || s === '—') return null;
+                const parts = s.split('/');
+                if (parts.length !== 3) return null;
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+
+            const validRows = ativData.filter(r => r.inicio && r.inicio !== '—');
+            if (!validRows.length) { document.body.removeChild(hidden); return null; }
+
+            // Gera SVG inline (simplificado para captura)
+            const dayWidth = 44;
+            const rowHeight = 28;
+            const headerHeight = 65;
+            let minDate = validRows.reduce((m, r) => { const d = parseBrDate(r.inicio); return d && d < m ? d : m; }, parseBrDate(validRows[0].inicio));
+            let maxDate = validRows.reduce((m, r) => { const d = parseBrDate(r.previsao) || parseBrDate(r.inicio); return d && d > m ? d : m; }, minDate);
+
+            function parseLocal(str) { const [y,m,d] = str.split('-').map(Number); return new Date(y,m-1,d); }
+            function toISO(dt) { return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }
+
+            const minD = parseLocal(minDate);
+            const maxD = parseLocal(maxDate);
+            const daysDiff = Math.round((maxD - minD) / 86400000);
+            const totalDays = Math.max(15, daysDiff + 3);
+            const startD = new Date(minD); startD.setDate(startD.getDate() - 1);
+
+            const width = totalDays * dayWidth + 20;
+            const height = headerHeight + validRows.length * rowHeight + 10;
+            const x0 = 10;
+
+            const dateToX = (dateStr) => {
+                const d = parseLocal(dateStr);
+                const days = Math.round((d - startD) / 86400000);
+                return x0 + days * dayWidth;
+            };
+
+            let svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" style="background:#fff;font-family:Segoe UI,Helvetica,Arial,sans-serif">`;
+
+            // Fundo branco
+            svgStr += `<rect width="100%" height="100%" fill="#fff"/>`;
+
+            // Headers dias
+            for (let i = 0; i < totalDays; i++) {
+                const d = new Date(startD); d.setDate(d.getDate() + i);
+                const x = x0 + i * dayWidth;
+                const isWE = d.getDay() === 0 || d.getDay() === 6;
+                if (isWE) svgStr += `<rect x="${x}" y="44" width="${dayWidth}" height="${height-44}" fill="#F3F4F6"/>`;
+                svgStr += `<rect x="${x}" y="44" width="${dayWidth}" height="21" fill="#5A8A9F"/>`;
+                svgStr += `<text x="${x+dayWidth/2}" y="58" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">${d.getDate()}</text>`;
+                svgStr += `<line x1="${x+dayWidth}" y1="65" x2="${x+dayWidth}" y2="${height-5}" stroke="#E5E7EB" stroke-width="0.5"/>`;
+            }
+
+            // Mês header
+            let curMonth = null; let mStartX = x0;
+            for (let i = 0; i <= totalDays; i++) {
+                const d = new Date(startD); d.setDate(d.getDate() + i);
+                const mk = `${d.getFullYear()}-${d.getMonth()}`;
+                if (curMonth === null) curMonth = mk;
+                if (mk !== curMonth || i === totalDays) {
+                    const endX = i === totalDays ? x0 + totalDays * dayWidth : dateToX(toISO(d));
+                    const w = endX - mStartX;
+                    const monthName = new Date(startD.getFullYear(), startD.getMonth(), 1).toLocaleDateString('pt-BR', {month:'short'});
+                    svgStr += `<rect x="${mStartX}" y="22" width="${w}" height="22" fill="#4A4B52"/>`;
+                    svgStr += `<text x="${mStartX+w/2}" y="37" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">${monthName}</text>`;
+                    curMonth = mk;
+                    mStartX = endX;
+                }
+            }
+
+            // Barras
+            validRows.forEach((r, idx) => {
+                const y = headerHeight + idx * rowHeight;
+                svgStr += `<line x1="${x0}" y1="${y+rowHeight}" x2="${x0+totalDays*dayWidth}" y2="${y+rowHeight}" stroke="#E5E7EB" stroke-width="0.5"/>`;
+                const ini = parseBrDate(r.inicio);
+                const prev = parseBrDate(r.previsao) || ini;
+                if (!ini) return;
+                const xIni = dateToX(ini);
+                const xFim = dateToX(prev) + dayWidth;
+                const w = Math.max(dayWidth, xFim - xIni);
+                let fill = '#E7D264';
+                if (r.status === 'Finalizado') fill = '#10B981';
+                svgStr += `<rect x="${xIni}" y="${y+4}" width="${w}" height="${rowHeight-8}" fill="${fill}" rx="4"/>`;
+                const label = r.atividade.length > 20 ? r.atividade.slice(0,20)+'…' : r.atividade;
+                svgStr += `<text x="${xIni+6}" y="${y+rowHeight/2+4}" fill="#1A1A1A" font-size="12" font-weight="500">${idx+1}. ${label.replace(/</g,'&lt;')}</text>`;
+            });
+
+            svgStr += `</svg>`;
+
+            // Renderiza SVG em canvas
+            const blob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
+            const url = URL.createObjectURL(blob);
+            const scale = 2;
+            const canvas = document.createElement('canvas');
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+
+            const img = new Image();
+            let result = null;
+
+            // Síncrono via callback (timeout para aguardar load)
+            const loadPromise = new Promise((resolve) => {
+                img.onload = () => {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    URL.revokeObjectURL(url);
+                    resolve(canvas.toDataURL('image/png', 0.92));
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+                img.src = url;
+            });
+
+            // Usamos um XMLHttpRequest síncrono para bloquear... na verdade, vamos usar async
+            // Retornamos a promise e o chamador espera
+            return loadPromise;
+        } catch (e) {
+            console.error('Erro ao gerar Gantt para email:', e);
+            return null;
+        }
     }
 
     // ─── EXPORTAR PDF ───

@@ -12,6 +12,12 @@ env/
 # Banco SQLite (auto-criado na primeira execução)
 data/sistema.db
 
+# Configuração de e-mail (contém senhas)
+data/email_config.json
+
+# Arquivos exportados (PDFs, imagens)
+data/exports/
+
 # IDE
 .vscode/
 .idea/

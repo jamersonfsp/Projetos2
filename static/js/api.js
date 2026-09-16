@@ -89,6 +89,14 @@ const API = (() => {
         },
         // Exportar Gantt (envia imagem para servidor)
         exportGantt: (data) => request('POST', '/api/exports/gantt', data),
+        // Configuração de e-mail
+        emailConfig: {
+            get:    () => request('GET', '/api/config/email'),
+            save:   (data) => request('POST', '/api/config/email', data),
+            test:   (data) => request('POST', '/api/config/email/test', data),
+        },
+        // Enviar e-mail do projeto
+        enviarEmail: (id, data) => request('POST', `/api/projetos/${id}/enviar-email`, data),
         // Modelos de Atividades
         modelos: {
             list:   ()         => request('GET',  '/api/modelos'),

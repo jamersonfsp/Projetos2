@@ -898,6 +898,247 @@ def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
 
 
 # ──────────────────────────────────────────────────────────────
+# Configuração de E-mail
+# ──────────────────────────────────────────────────────────────
+
+@api_bp.route('/config/email', methods=['GET'])
+def get_email_config():
+    from app.email_sender import load_config
+    config = load_config()
+    # Não retorna a senha
+    return jsonify({
+        'smtp_server': config.get('smtp_server', 'smtp.office365.com'),
+        'smtp_port': config.get('smtp_port', 587),
+        'email': config.get('email', ''),
+        'nome_remetente': config.get('nome_remetente', ''),
+        'configured': bool(config.get('email') and config.get('password')),
+    })
+
+
+@api_bp.route('/config/email', methods=['POST'])
+def save_email_config():
+    from app.email_sender import load_config, save_config
+    data = request.get_json()
+    config = load_config()
+    if 'smtp_server' in data:
+        config['smtp_server'] = data['smtp_server']
+    if 'smtp_port' in data:
+        config['smtp_port'] = int(data['smtp_port'])
+    if 'email' in data:
+        config['email'] = data['email']
+    if 'password' in data and data['password']:  # só atualiza se não vazio
+        config['password'] = data['password']
+    if 'nome_remetente' in data:
+        config['nome_remetente'] = data['nome_remetente']
+    save_config(config)
+    return jsonify({'ok': True})
+
+
+@api_bp.route('/config/email/test', methods=['POST'])
+def test_email_config():
+    from app.email_sender import send_email
+    data = request.get_json()
+    to = data.get('to', '')
+    if not to:
+        return jsonify({'error': 'Informe um e-mail de destino para teste'}), 400
+    result = send_email(
+        [to],
+        'Teste - Sistema de Controle de Projeto',
+        '<p>Este é um e-mail de teste do Sistema de Controle de Projeto.</p><p>Se você recebeu esta mensagem, a configuração está funcionando corretamente.</p>',
+    )
+    if result.get('ok'):
+        return jsonify({'ok': True, 'message': 'E-mail de teste enviado com sucesso!'})
+    return jsonify(result), 400
+
+
+# ──────────────────────────────────────────────────────────────
+# Enviar E-mail do Projeto
+# ──────────────────────────────────────────────────────────────
+
+@api_bp.route('/projetos/<int:pid>/enviar-email', methods=['POST'])
+def enviar_email_projeto(pid):
+    """Envia e-mail de abertura do projeto para todos os responsáveis envolvidos."""
+    from app.email_sender import send_email, load_config
+    from app.business import format_date_br, calcular_situacao
+    data = request.get_json() or {}
+    incluir_gantt = bool(data.get('incluir_gantt', False))
+    gantt_image_b64 = data.get('gantt_image', None)  # base64 data URL
+    db = get_db()
+
+    # Busca projeto
+    p = db.execute("SELECT * FROM projetos WHERE ID = ?", (pid,)).fetchone()
+    if not p:
+        return jsonify({'error': 'Projeto não encontrado'}), 404
+
+    # Busca atividades
+    atividades = db.execute(
+        "SELECT * FROM atividades WHERE Id_projetos = ? ORDER BY sequencia", (pid,)
+    ).fetchall()
+
+    # Coleta e-mails dos responsáveis (projeto + atividades)
+    emails_set = set()
+    responsavel_projeto = p['Responsavel'] or ''
+
+    # Busca e-mail do responsável do projeto
+    if responsavel_projeto:
+        resp_row = db.execute(
+            "SELECT email FROM responsaveis WHERE Nome = ?", (responsavel_projeto,)
+        ).fetchone()
+        if resp_row and resp_row['email']:
+            emails_set.add(resp_row['email'].strip())
+
+    # Busca e-mails dos responsáveis das atividades
+    for a in atividades:
+        resp_nome = a['Responsavel'] or ''
+        if resp_nome:
+            resp_row = db.execute(
+                "SELECT email FROM responsaveis WHERE Nome = ?", (resp_nome,)
+            ).fetchone()
+            if resp_row and resp_row['email']:
+                emails_set.add(resp_row['email'].strip())
+
+    if not emails_set:
+        return jsonify({'error': 'Nenhum responsável com e-mail cadastrado. Cadastre e-mails na tela de Responsáveis.'}), 400
+
+    # Gera PDF
+    id_to_seq = {a['ID']: a['sequencia'] for a in atividades}
+    html_pdf = _build_pdf_html(p, atividades, [], [], id_to_seq)
+    from xhtml2pdf import pisa
+    import io
+    pdf_buffer = io.BytesIO()
+    pisa.CreatePDF(html_pdf, dest=pdf_buffer)
+    pdf_buffer.seek(0)
+    pdf_data = pdf_buffer.read()
+
+    titulo = (p['Titulo'] or 'projeto').strip()[:60]
+    safe_name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in titulo)
+
+    attachments = [{
+        'filename': f'Projeto_{pid}_{safe_name}.pdf',
+        'data': pdf_data,
+        'mimetype': 'application/pdf',
+    }]
+
+    # Gantt (opcional)
+    if incluir_gantt and gantt_image_b64:
+        import base64
+        b64_str = gantt_image_b64
+        ext = 'png'
+        if ',' in b64_str:
+            header, b64_str = b64_str.split(',', 1)
+            if 'jpeg' in header:
+                ext = 'jpg'
+        img_data = base64.b64decode(b64_str)
+        attachments.append({
+            'filename': f'Gantt_Projeto_{pid}.{ext}',
+            'data': img_data,
+            'mimetype': f'image/{ext}',
+        })
+
+    # Monta o corpo do e-mail
+    config = load_config()
+    from datetime import datetime
+    data_hoje = datetime.now().strftime('%d/%m/%Y')
+
+    # Lista de atividades para o e-mail
+    ativ_html = ''
+    for a in atividades:
+        dep_label = str(id_to_seq.get(a['Dependencia'], '—')) if a['Dependencia'] else '—'
+        ativ_html += f'''
+        <tr>
+            <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">{a["sequencia"]}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #eee">{(a["Atividade"] or "").replace("<", "&lt;")}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #eee">{(a["Responsavel"] or "—").replace("<", "&lt;")}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">{format_date_br(a["Inicio"])}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">{format_date_br(a["Previsao"])}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">{a["Duracao"] or 1} dia(s)</td>
+        </tr>'''
+
+    email_html = f'''
+    <div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;max-width:700px;margin:0 auto;color:#1a1a1a">
+        <div style="background:#36373D;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0">
+            <h1 style="margin:0;font-size:20px;font-weight:600">Novo Projeto Aberto</h1>
+            <p style="margin:6px 0 0;font-size:13px;opacity:0.9">{data_hoje}</p>
+        </div>
+
+        <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none">
+            <p style="font-size:14px;line-height:1.6;margin:0 0 16px">
+                Olá, tudo bem?
+            </p>
+            <p style="font-size:14px;line-height:1.6;margin:0 0 16px">
+                O projeto <strong style="color:#36373D">{(p["Titulo"] or "").replace("<", "&lt;")}</strong> acabou de ser aberto e você está entre os colaboradores envolvidos.
+            </p>
+            <p style="font-size:14px;line-height:1.6;margin:0 0 16px">
+                Seguem abaixo os dados principais e as atividades que foram definidas. Peço que verifiquem seus prazos e se organizem para cumprir os cronogramas estabelecidos. Qualquer divergência ou necessidade de ajuste, por favor me avisem o quanto antes para que possamos alinhar.
+            </p>
+            <p style="font-size:14px;line-height:1.6;margin:0 0 20px">
+            O compromisso de cada um com os prazos faz toda a diferença para o resultado final. Conto com a colaboração de todos.
+            </p>
+
+            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin-bottom:20px">
+                <h3 style="margin:0 0 12px;font-size:15px;color:#36373D;border-bottom:2px solid #E7D264;padding-bottom:6px">Dados do Projeto</h3>
+                <table style="width:100%;font-size:13px">
+                    <tr><td style="padding:4px 0;color:#6b7280;width:120px">Código</td><td style="padding:4px 0;font-weight:600">#{p["ID"]}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280">Responsável</td><td style="padding:4px 0">{(p["Responsavel"] or "—").replace("<", "&lt;")}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280">Setor</td><td style="padding:4px 0">{(p["Setor"] or "—").replace("<", "&lt;")}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280">Tipo</td><td style="padding:4px 0">{(p["Tipo"] or "—").replace("<", "&lt;")}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280">Início</td><td style="padding:4px 0">{format_date_br(p["Inicio"])}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280">Previsão</td><td style="padding:4px 0;font-weight:600">{format_date_br(p["Previsao"])}</td></tr>
+                </table>
+            </div>
+
+            <h3 style="margin:0 0 12px;font-size:15px;color:#36373D;border-bottom:2px solid #E7D264;padding-bottom:6px">Atividades</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead>
+                    <tr style="background:#36373D;color:#fff">
+                        <th style="padding:8px 10px;text-align:left">#</th>
+                        <th style="padding:8px 10px;text-align:left">Atividade</th>
+                        <th style="padding:8px 10px;text-align:left">Responsável</th>
+                        <th style="padding:8px 10px;text-align:center">Início</th>
+                        <th style="padding:8px 10px;text-align:center">Previsão</th>
+                        <th style="padding:8px 10px;text-align:center">Duração</th>
+                    </tr>
+                </thead>
+                <tbody>{ativ_html}</tbody>
+            </table>
+
+            <p style="font-size:13px;color:#6b7280;margin:20px 0 0;line-height:1.5">
+                Em anexo, o PDF completo do projeto{", além do gráfico de Gantt com o cronograma visual." if incluir_gantt else "."}
+            </p>
+        </div>
+
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;padding:14px 24px;border-radius:0 0 8px 8px;font-size:11px;color:#9ca3af;text-align:center">
+            Esta mensagem foi enviada automaticamente pelo Sistema de Controle de Projeto.
+        </div>
+    </div>
+    '''
+
+    assunto = f'[{p["Status"]}] Projeto #{p["ID"]} — {(p["Titulo"] or "").replace("<", "&lt;")}'
+
+    result = send_email(
+        list(emails_set),
+        assunto,
+        email_html,
+        attachments=attachments,
+    )
+
+    if result.get('ok'):
+        # Registra no histórico
+        db.execute("""
+            INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
+            VALUES (?, ?, ?)
+        """, (pid, B.today_iso(),
+              f"E-mail de abertura enviado para: {', '.join(emails_set)}"))
+        db.commit()
+        return jsonify({
+            'ok': True,
+            'message': f'E-mail enviado com sucesso para {len(emails_set)} destinatário(s).',
+            'destinatarios': list(emails_set),
+        })
+    return jsonify(result), 400
+
+
+# ──────────────────────────────────────────────────────────────
 # Modelos de Atividades
 # ──────────────────────────────────────────────────────────────
 
