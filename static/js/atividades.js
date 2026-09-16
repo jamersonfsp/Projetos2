@@ -101,6 +101,13 @@ const AtividadesView = (() => {
                 <div class="ativ-right" id="ativRight">
                     <div class="gantt-header-bar">
                         <span>Gráfico de Gantt</span>
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <select id="fGanttFormat" style="padding:3px 6px;font-size:11px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#fff">
+                                <option value="png" style="color:#1a1a1a">PNG</option>
+                                <option value="jpeg" style="color:#1a1a1a">JPG</option>
+                            </select>
+                            <button class="btn btn-sm" id="btnExportGantt" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:3px 10px;font-size:11px">📥 Exportar</button>
+                        </div>
                     </div>
                     <div class="gantt-scroll" id="ganttScroll">
                         <div class="gantt-body" id="ganttBody"></div>
@@ -141,6 +148,7 @@ const AtividadesView = (() => {
         });
 
         document.getElementById('btnImportarModelo').addEventListener('click', () => importarModelo());
+        document.getElementById('btnExportGantt').addEventListener('click', () => exportGantt());
 
         // Toggle header collapse
         document.getElementById('btnToggleHeader').addEventListener('click', () => {
@@ -194,6 +202,7 @@ const AtividadesView = (() => {
     // ─── Cria uma linha da tabela ───
     function createRow(a, seq) {
         const isFinalizado = a.status === 'Finalizado';
+        const isLoaded = !!a.ID; // veio do banco de dados
         const tr = App.el('tr', { 'data-seq': seq, draggable: isFinalizado ? 'false' : 'true' });
         tr.dataset.ativId = a.ID || '';
         if (isFinalizado) tr.classList.add('row-finalizado');
@@ -299,9 +308,34 @@ const AtividadesView = (() => {
         }
         tr.appendChild(tdDel);
 
+        // ─── Flag: atividade carregada do banco já tem datas salvas ───
+        if (isLoaded) {
+            tr.dataset.datesLoaded = '1';
+        }
+
         // ─── Listeners para recalcular ───
-        selDep.addEventListener('change', () => recalcRow(tr));
-        inpIni.addEventListener('change', () => recalcRow(tr));
+        selDep.addEventListener('change', () => {
+            // Mudou dependência → recalcula inicio a partir da nova dependência
+            tr.dataset.userModifiedInicio = ''; // reseta flag
+            recalcRow(tr);
+        });
+        inpIni.addEventListener('change', () => {
+            // Usuário mudou manualmente a data → valida contra dependência
+            const depVal = tr.querySelector('select[name="Dependencia"]').value;
+            if (depVal) {
+                const depSeq = parseInt(depVal);
+                const depRow = document.querySelector(`#ativBody tr[data-seq="${depSeq}"]`);
+                if (depRow) {
+                    const depPrev = depRow.querySelector('input[name="Previsao"]').value;
+                    if (depPrev && inpIni.value && inpIni.value < depPrev) {
+                        App.toast(`Data não pode ser anterior à previsão da atividade ${depSeq} (${App.fmtDate(depPrev)})`, 'warning');
+                        inpIni.value = depPrev;
+                    }
+                }
+            }
+            tr.dataset.userModifiedInicio = '1'; // marca como editado manualmente
+            recalcRow(tr);
+        });
         inpDur.addEventListener('change', () => recalcRow(tr));
         chkSab.addEventListener('change', () => recalcRow(tr));
         chkDom.addEventListener('change', () => recalcRow(tr));
@@ -320,8 +354,24 @@ const AtividadesView = (() => {
         tr.addEventListener('drop', onDrop);
         tr.addEventListener('dragend', onDragEnd);
 
-        // Calcula inicial (async, não bloqueia)
-        setTimeout(() => recalcRow(tr), 0);
+        // Para atividades NOVAS (não carregadas), calcula datas iniciais
+        // Para atividades carregadas do banco, NÃO recalcula (datas já salvas)
+        if (!isLoaded) {
+            setTimeout(() => recalcRow(tr), 0);
+        } else {
+            // Apenas calcula previsão (caso não exista), mas NÃO mexe no início
+            setTimeout(() => {
+                if (inpIni.value && !inpPrev.value) {
+                    const dur = parseInt(inpDur.value) || 1;
+                    API.calcular.previsao({
+                        inicio: inpIni.value, duracao: dur,
+                        sabado: chkSab.checked, domingo: chkDom.checked
+                    }).then(r => { inpPrev.value = r.previsao || ''; renderGantt(); }).catch(() => {});
+                } else {
+                    renderGantt();
+                }
+            }, 0);
+        }
 
         return tr;
     }
@@ -412,21 +462,36 @@ const AtividadesView = (() => {
         const dur = parseInt(inpDur.value) || 1;
         const skipSat = chkSab.checked;
         const skipSun = chkDom.checked;
+        const userModified = tr.dataset.userModifiedInicio === '1';
 
         // Se tem dependência, calcula inicio a partir da previsão da dependência
+        // MAS apenas se o usuário NÃO alterou manualmente a data
         if (depVal) {
             const depSeq = parseInt(depVal);
             const depRow = document.querySelector(`#ativBody tr[data-seq="${depSeq}"]`);
             if (depRow) {
                 const depPrev = depRow.querySelector('input[name="Previsao"]').value;
                 if (depPrev) {
+                    // Sempre calcula o início mínimo (da dependência)
+                    let minInicio = null;
                     try {
                         const r = await API.calcular.inicio({
                             dependencia_previsao: depPrev,
                             sabado: skipSat, domingo: skipSun
                         });
-                        inpIni.value = r.inicio;
+                        minInicio = r.inicio;
                     } catch (e) {}
+
+                    if (minInicio) {
+                        if (!userModified) {
+                            // Não foi editado manualmente → auto-seta
+                            inpIni.value = minInicio;
+                        } else if (inpIni.value && inpIni.value < minInicio) {
+                            // Usuário setou data anterior ao mínimo → corrige
+                            App.toast(`Data ajustada para ${App.fmtDate(minInicio)} (não pode ser anterior à atividade ${depSeq})`, 'warning');
+                            inpIni.value = minInicio;
+                        }
+                    }
                 }
             }
         } else {
@@ -906,6 +971,99 @@ const AtividadesView = (() => {
             `${ax},${ay + arrowSize} ${ax - arrowSize / 2},${ay} ${ax + arrowSize / 2},${ay}`);
         head.setAttribute('class', 'dep-arrow-head');
         svg.appendChild(head);
+    }
+
+    // ─── Exportar Gantt como imagem (PNG/JPG) ───
+    function exportGantt() {
+        const svgEl = document.querySelector('#ganttBody .gantt-svg');
+        if (!svgEl) {
+            App.toast('Nenhum gráfico para exportar', 'warning');
+            return;
+        }
+
+        const format = document.getElementById('fGanttFormat').value; // 'png' ou 'jpeg'
+        const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+        const ext = format === 'jpeg' ? 'jpg' : 'png';
+
+        // Clona o SVG e inline todos os estilos CSS computados
+        const svgClone = svgEl.cloneNode(true);
+
+        // Resolve estilos CSS inline (xhtml2pdf-like approach para SVG)
+        const allElements = svgClone.querySelectorAll('*');
+        const origElements = svgEl.querySelectorAll('*');
+        for (let i = 0; i < allElements.length; i++) {
+            const computed = window.getComputedStyle(origElements[i]);
+            const el = allElements[i];
+            // Propriedades essenciais
+            const props = ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size', 'font-weight', 'text-anchor', 'opacity'];
+            props.forEach(p => {
+                const v = computed.getPropertyValue(p);
+                if (v) el.style[p] = v;
+            });
+        }
+
+        // Adiciona fundo branco
+        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        bg.setAttribute('width', '100%');
+        bg.setAttribute('height', '100%');
+        bg.setAttribute('fill', '#ffffff');
+        svgClone.insertBefore(bg, svgClone.firstChild);
+
+        // Serializa SVG para string
+        const serializer = new XMLSerializer();
+        let svgString = serializer.serializeToString(svgClone);
+
+        // Garante xmlns
+        if (!svgString.includes('xmlns=')) {
+            svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+
+        // Escala para melhor resolução (2x)
+        const scale = 2;
+        const svgWidth = parseInt(svgEl.getAttribute('width')) || 800;
+        const svgHeight = parseInt(svgEl.getAttribute('height')) || 400;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = svgWidth * scale;
+        canvas.height = svgHeight * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+
+        const img = new Image();
+        const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        img.onload = () => {
+            // Fundo branco
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, svgWidth, svgHeight);
+            ctx.drawImage(img, 0, 0, svgWidth, svgHeight);
+            URL.revokeObjectURL(url);
+
+            // Converte canvas para blob e faz download
+            canvas.toBlob((downloadBlob) => {
+                if (!downloadBlob) {
+                    App.toast('Erro ao gerar imagem', 'error');
+                    return;
+                }
+                const downloadUrl = URL.createObjectURL(downloadBlob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `gantt_projeto_${projetoId}.${ext}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+                App.toast(`Gantt exportado como ${ext.toUpperCase()}!`, 'success');
+            }, mimeType, 0.92);
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            App.toast('Erro ao processar o gráfico', 'error');
+        };
+
+        img.src = url;
     }
 
     function escapeHtml(s) {

@@ -894,20 +894,20 @@ const ProjetoView = (() => {
             btn.textContent = 'Gerando...';
 
             try {
-                const blob = await API.projetos.exportPdf(pid, {
+                const result = await API.projetos.exportPdf(pid, {
                     atualizacoes: incluirAtualizacoes,
                     cobrancas: incluirCobrancas,
                 });
 
                 // Download do arquivo
-                const url = URL.createObjectURL(blob);
+                const url = URL.createObjectURL(result.blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Projeto_${pid}.pdf`;
+                a.download = result.filename || `Projeto_${pid}.pdf`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
 
                 App.toast('PDF gerado com sucesso!', 'success');
                 m.close();

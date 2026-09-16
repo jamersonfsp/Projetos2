@@ -771,7 +771,7 @@ def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
         h2 {{ font-size: 14px; margin: 16px 0 8px; color: #36373D; border-bottom: 2px solid #E7D264; padding-bottom: 4px; }}
         .header-bar {{ background: #36373D; color: #fff; padding: 12px 16px; margin-bottom: 16px; }}
         .header-bar h1 {{ color: #fff; font-size: 18px; }}
-        .header-bar .meta {{ font-size: 11px; opacity: 0.9; margin-top: 4px; }}
+        .header-bar .meta {{ font-size: 11px; color: #cccccc; margin-top: 4px; }}
         .dados-grid {{ display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 12px; }}
         .dados-grid .item {{ min-width: 180px; }}
         .dados-grid .item label {{ font-size: 10px; color: #888; text-transform: uppercase; display: block; }}
@@ -779,10 +779,10 @@ def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
         .textarea-block {{ margin-bottom: 10px; }}
         .textarea-block label {{ font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 2px; }}
         .textarea-block .content {{ border: 1px solid #ddd; padding: 8px; font-size: 11px; min-height: 40px; background: #fafafa; white-space: pre-wrap; }}
-        table {{ width: 100%; border-collapse: collapse; font-size: 10px; }}
+        table {{ width: 100%; border-spacing: 0; font-size: 10px; }}
         table th {{ background: #36373D; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }}
         table td {{ padding: 5px 8px; border-bottom: 1px solid #e5e7eb; }}
-        table tr:nth-child(even) {{ background: #f9fafb; }}
+        table tr:nth-child(even) td {{ background: #f9fafb; }}
         .footer {{ margin-top: 20px; font-size: 9px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 6px; }}
     </style>
     </head>

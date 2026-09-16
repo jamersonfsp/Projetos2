@@ -35,9 +35,27 @@ Continuar as correções:
   • Atualizações (opcional, conforme checkbox)
   • Cobranças (opcional, conforme checkbox)
 - Permitir exportar apenas o "esqueleto" do projeto (sem atualizações/cobranças) se nenhum checkbox estiver marcado.
+  ✅ IMPLEMENTADO
 
 2 - Lista de Projetos: Ordenação por colunas
 - Tornar os cabeçalhos da tabela clicáveis para ordenar a lista.
 - Colunas ordenáveis: Código, Projeto, Responsável, Status, Início, Fim, Situação.
 - Ordenação alfanumérica (A→Z ou 1→9) na primeira clique; inverte (Z→A ou 9→1) na segunda clique.
 - Indicador visual (seta ▲/▼) no cabeçalho da coluna ativa.
+  ✅ IMPLEMENTADO
+
+────────────────────────────────────
+3º Correções e Melhorias Adicionais
+────────────────────────────────────
+
+1 - PDF: corrigir CSS incompatível com xhtml2pdf (border-collapse, opacity) e garantir download direto.
+  ✅ IMPLEMENTADO
+
+2 - Tela de Atividades: datas de dependência
+  - Ao carregar atividades salvas do banco, ler as datas do banco (não recalcular).
+  - Ao mudar dependência, auto-setar data posterior à atividade mãe.
+  - Usuário pode trocar data manualmente, desde que não seja inferior à previsão da atividade mãe.
+  ✅ IMPLEMENTADO
+
+3 - Tela de Atividades: exportar Gráfico de Gantt em JPG ou PNG.
+  ✅ IMPLEMENTADO
