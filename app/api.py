@@ -903,15 +903,23 @@ def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
 
 @api_bp.route('/config/email', methods=['GET'])
 def get_email_config():
-    from app.email_sender import load_config
+    from app.email_sender import load_config, is_outlook_available
     config = load_config()
-    # Não retorna a senha
+    outlook_ok = is_outlook_available()
+    metodo = config.get('metodo', 'auto')
+    # Determina se está configurado
+    if metodo == 'outlook' or (metodo == 'auto' and outlook_ok):
+        configured = True
+    else:
+        configured = bool(config.get('email') and config.get('password'))
     return jsonify({
         'smtp_server': config.get('smtp_server', 'smtp.office365.com'),
         'smtp_port': config.get('smtp_port', 587),
         'email': config.get('email', ''),
         'nome_remetente': config.get('nome_remetente', ''),
-        'configured': bool(config.get('email') and config.get('password')),
+        'metodo': metodo,
+        'outlook_disponivel': outlook_ok,
+        'configured': configured,
     })
 
 
@@ -930,6 +938,8 @@ def save_email_config():
         config['password'] = data['password']
     if 'nome_remetente' in data:
         config['nome_remetente'] = data['nome_remetente']
+    if 'metodo' in data:
+        config['metodo'] = data['metodo']
     save_config(config)
     return jsonify({'ok': True})
 
