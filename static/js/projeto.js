@@ -135,6 +135,64 @@ const ProjetoView = (() => {
     }
 
     // ───────── LISTA DE PROJETOS ─────────
+    let projetosCache = []; // cache para ordenação client-side
+    let sortCol = null;     // coluna atual de ordenação
+    let sortAsc = true;     // direção
+
+    function sortProjetos(lista, col, asc) {
+        if (!col) return lista;
+        const sorted = [...lista];
+        sorted.sort((a, b) => {
+            let va, vb;
+            switch (col) {
+                case 'ID':        va = a.ID || 0; vb = b.ID || 0; break;
+                case 'Titulo':    va = (a.Titulo || '').toLowerCase(); vb = (b.Titulo || '').toLowerCase(); break;
+                case 'Responsavel': va = (a.Responsavel || '').toLowerCase(); vb = (b.Responsavel || '').toLowerCase(); break;
+                case 'Status':    va = (a.Status || '').toLowerCase(); vb = (b.Status || '').toLowerCase(); break;
+                case 'Inicio':    va = a.Inicio || ''; vb = b.Inicio || ''; break;
+                case 'Fim':       va = a.Fim || ''; vb = b.Fim || ''; break;
+                case 'Situacao':  va = (a.Situacao || '').toLowerCase(); vb = (b.Situacao || '').toLowerCase(); break;
+                default: return 0;
+            }
+            if (va < vb) return asc ? -1 : 1;
+            if (va > vb) return asc ? 1 : -1;
+            return 0;
+        });
+        return sorted;
+    }
+
+    function updateSortIndicators() {
+        document.querySelectorAll('#projetosTable th[data-sort]').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+            const indicator = th.querySelector('.sort-arrow');
+            if (indicator) indicator.textContent = '';
+            if (th.dataset.sort === sortCol) {
+                th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+                if (indicator) indicator.textContent = sortAsc ? ' ▲' : ' ▼';
+            }
+        });
+    }
+
+    function renderProjetosTable(lista) {
+        const tbody = document.querySelector('#projetosTable tbody');
+        if (!lista.length) {
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><h3>Nenhum projeto encontrado</h3><p>Tente ajustar os filtros.</p></div></td></tr>`;
+            return;
+        }
+        tbody.innerHTML = lista.map(p => `
+            <tr>
+                <td><strong>#${p.ID}</strong></td>
+                <td>${escapeHtml(p.Titulo || '')}</td>
+                <td>${p.Responsavel || '—'}</td>
+                <td>${App.statusBadge(p.Status)}</td>
+                <td>${App.fmtDate(p.Inicio)}</td>
+                <td>${App.fmtDate(p.Fim)}</td>
+                <td class="situacao-cell">${App.situacaoBadge(p.Situacao)}</td>
+                <td><button class="btn btn-sm btn-primary" onclick="App.navigate('/projeto/${p.ID}')">Abrir</button></td>
+            </tr>
+        `).join('');
+    }
+
     async function renderLista() {
         const view = document.getElementById('view');
         view.className = 'view-container projetos-view';
@@ -181,13 +239,13 @@ const ProjetoView = (() => {
                 <table class="data-table" id="projetosTable">
                     <thead>
                         <tr>
-                            <th>Código</th>
-                            <th>Projeto</th>
-                            <th>Responsável</th>
-                            <th>Status</th>
-                            <th>Início</th>
-                            <th>Fim</th>
-                            <th>Situação</th>
+                            <th data-sort="ID" style="cursor:pointer;user-select:none">Código<span class="sort-arrow"></span></th>
+                            <th data-sort="Titulo" style="cursor:pointer;user-select:none">Projeto<span class="sort-arrow"></span></th>
+                            <th data-sort="Responsavel" style="cursor:pointer;user-select:none">Responsável<span class="sort-arrow"></span></th>
+                            <th data-sort="Status" style="cursor:pointer;user-select:none">Status<span class="sort-arrow"></span></th>
+                            <th data-sort="Inicio" style="cursor:pointer;user-select:none">Início<span class="sort-arrow"></span></th>
+                            <th data-sort="Fim" style="cursor:pointer;user-select:none">Fim<span class="sort-arrow"></span></th>
+                            <th data-sort="Situacao" style="cursor:pointer;user-select:none">Situação<span class="sort-arrow"></span></th>
                             <th>Ação</th>
                         </tr>
                     </thead>
@@ -247,10 +305,31 @@ const ProjetoView = (() => {
             document.getElementById('fCodigo').value = '';
             selStatus = []; selResp = []; selSetor = [];
             msS.set([]); msR.set([]); msT.set([]);
+            sortCol = null;
+            sortAsc = true;
+            updateSortIndicators();
             buscar([], [], []);
         });
 
+        // Ordenação por coluna (click no cabeçalho)
+        document.querySelectorAll('#projetosTable th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.dataset.sort;
+                if (sortCol === col) {
+                    sortAsc = !sortAsc;
+                } else {
+                    sortCol = col;
+                    sortAsc = true;
+                }
+                const sorted = sortProjetos(projetosCache, sortCol, sortAsc);
+                renderProjetosTable(sorted);
+                updateSortIndicators();
+            });
+        });
+
         // Busca inicial (sem filtros)
+        sortCol = null;
+        sortAsc = true;
         buscar([], [], []);
     }
 
@@ -262,25 +341,12 @@ const ProjetoView = (() => {
         if (resps.length) params.responsavel = resps;
         if (setores.length) params.setor = setores;
 
-        const tbody = document.querySelector('#projetosTable tbody');
         try {
             const lista = await API.projetos.list(params);
-            if (!lista.length) {
-                tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><h3>Nenhum projeto encontrado</h3><p>Tente ajustar os filtros.</p></div></td></tr>`;
-                return;
-            }
-            tbody.innerHTML = lista.map(p => `
-                <tr>
-                    <td><strong>#${p.ID}</strong></td>
-                    <td>${escapeHtml(p.Titulo || '')}</td>
-                    <td>${p.Responsavel || '—'}</td>
-                    <td>${App.statusBadge(p.Status)}</td>
-                    <td>${App.fmtDate(p.Inicio)}</td>
-                    <td>${App.fmtDate(p.Fim)}</td>
-                    <td class="situacao-cell">${App.situacaoBadge(p.Situacao)}</td>
-                    <td><button class="btn btn-sm btn-primary" onclick="App.navigate('/projeto/${p.ID}')">Abrir</button></td>
-                </tr>
-            `).join('');
+            projetosCache = lista;
+            const sorted = sortProjetos(lista, sortCol, sortAsc);
+            renderProjetosTable(sorted);
+            updateSortIndicators();
         } catch (e) {
             App.toast('Erro: ' + e.message, 'error');
         }
@@ -411,6 +477,7 @@ const ProjetoView = (() => {
                             <button class="btn btn-secondary" id="btnPausar">Pausar</button>
                             <button class="btn btn-warning" id="btnCancelar">Cancelar</button>
                             <button class="btn btn-danger" id="btnExcluir">Excluir Projeto</button>
+                            <button class="btn btn-primary" id="btnExportPdf" style="margin-left:auto;background:#E7D264;color:#1a1a1a;border-color:#E7D264;">📄 Exportar PDF</button>
                         </div>
                     </div>
 
@@ -447,6 +514,7 @@ const ProjetoView = (() => {
             document.getElementById('btnPausar').addEventListener('click', () => pausar(pid));
             document.getElementById('btnCancelar').addEventListener('click', () => cancelar(pid));
             document.getElementById('btnExcluir').addEventListener('click', () => excluir(pid));
+            document.getElementById('btnExportPdf').addEventListener('click', () => exportPdf(pid));
 
         } catch (e) {
             view.innerHTML = `<div class="empty-state"><h3>Erro</h3><p>${e.message}</p></div>`;
@@ -788,6 +856,67 @@ const ProjetoView = (() => {
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    // ─── EXPORTAR PDF ───
+    function exportPdf(pid) {
+        const m = App.modal({
+            title: 'Exportar PDF do Projeto',
+            size: 'sm',
+            body: `
+                <p class="text-sm text-muted mb-3">Selecione o que deseja incluir no PDF:</p>
+                <div class="form-group mb-2">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+                        <input type="checkbox" id="fPdfAtualizacoes" style="width:auto">
+                        Incluir Atualizações
+                    </label>
+                </div>
+                <div class="form-group mb-3">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+                        <input type="checkbox" id="fPdfCobrancas" style="width:auto">
+                        Incluir Cobranças
+                    </label>
+                </div>
+                <p class="text-sm text-muted">Se nenhum checkbox estiver marcado, será exportado apenas o esqueleto do projeto (dados + atividades).</p>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Cancelar'),
+                App.el('button', { class: 'btn btn-primary', id: 'btnConfirmPdf', style: 'background:#E7D264;color:#1a1a1a;border-color:#E7D264' }, '📄 Gerar PDF'),
+            ]
+        });
+
+        document.getElementById('btnConfirmPdf').addEventListener('click', async () => {
+            const incluirAtualizacoes = document.getElementById('fPdfAtualizacoes').checked;
+            const incluirCobrancas = document.getElementById('fPdfCobrancas').checked;
+
+            const btn = document.getElementById('btnConfirmPdf');
+            btn.disabled = true;
+            btn.textContent = 'Gerando...';
+
+            try {
+                const blob = await API.projetos.exportPdf(pid, {
+                    atualizacoes: incluirAtualizacoes,
+                    cobrancas: incluirCobrancas,
+                });
+
+                // Download do arquivo
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Projeto_${pid}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                App.toast('PDF gerado com sucesso!', 'success');
+                m.close();
+            } catch (e) {
+                App.toast('Erro ao gerar PDF: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.textContent = '📄 Gerar PDF';
+            }
+        });
     }
 
     return { renderCadastro, renderLista, renderTela, finalizarAtividade, verAtualizacoes };

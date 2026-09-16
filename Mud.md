@@ -18,4 +18,26 @@ Continuar as correções:
 
 2 - Na Tela do Projeto quero que alterer os TextBox da Descrição, Resolução Final e Observação Geral estão muito pequeno para um local que pode receber até 500 Caracteres. Quero que eles fiquem um abaixo de outro e fiquem de ponta a ponta.
 
-3 - Na Tela do Projeto, corrigir a coluna Atualizações e Cobranças, que quando muda para uma tela com resolução maior, ele se deconfigura ficando mais larga e o primeiro registro não fica organizada toda desconfigurada 
+3 - Na Tela do Projeto, corrigir a coluna Atualizações e Cobranças, que quando muda para uma tela com resolução maior, ele se deconfigura ficando mais larga e o primeiro registro não fica organizada toda desconfigurada
+
+────────────────────────────────────
+2º Novas Melhorias
+────────────────────────────────────
+
+1 - Tela do Projeto: Botão Exportar PDF
+- Adicionar botão "Exportar PDF" na Tela do Projeto.
+- Ao clicar, abrir pop-up de confirmação com duas opções (checkboxes):
+  ☐ Atualizações
+  ☐ Cobranças
+- O PDF deve conter toda a ficha do projeto:
+  • Dados do projeto (título, descrição, responsável, setor, datas, status, tipo, resolução final, observação geral)
+  • Tabela de atividades (sequência, atividade, responsável, dependência, início, fim, duração, status, finalização, situação)
+  • Atualizações (opcional, conforme checkbox)
+  • Cobranças (opcional, conforme checkbox)
+- Permitir exportar apenas o "esqueleto" do projeto (sem atualizações/cobranças) se nenhum checkbox estiver marcado.
+
+2 - Lista de Projetos: Ordenação por colunas
+- Tornar os cabeçalhos da tabela clicáveis para ordenar a lista.
+- Colunas ordenáveis: Código, Projeto, Responsável, Status, Início, Fim, Situação.
+- Ordenação alfanumérica (A→Z ou 1→9) na primeira clique; inverte (Z→A ou 9→1) na segunda clique.
+- Indicador visual (seta ▲/▼) no cabeçalho da coluna ativa.

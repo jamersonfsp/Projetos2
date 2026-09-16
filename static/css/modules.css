@@ -237,6 +237,24 @@
 .projetos-view .situacao-cell .badge {
     font-size: 11px;
 }
+.projetos-view th[data-sort] {
+    position: relative;
+    transition: background 0.15s;
+}
+.projetos-view th[data-sort]:hover {
+    background: #36373D;
+    color: #fff;
+}
+.projetos-view th[data-sort].sort-asc,
+.projetos-view th[data-sort].sort-desc {
+    background: #36373D;
+    color: #fff;
+}
+.projetos-view .sort-arrow {
+    font-size: 10px;
+    margin-left: 4px;
+    opacity: 0.7;
+}
 
 /* ───────── Tela do Projeto ───────── */
 .projeto-view .projeto-header {

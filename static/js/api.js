@@ -60,6 +60,17 @@ const API = (() => {
             pausar:    (id)       => request('POST', `/api/projetos/${id}/pausar`),
             cobranca:  (id, data) => request('POST', `/api/projetos/${id}/cobranca`, data),
             atualizacao:(id, data)=> request('POST', `/api/projetos/${id}/atualizacoes`, data),
+            exportPdf: (id, data) => {
+                // Retorna Promise que resolve com o Blob do PDF
+                return fetch(`/api/projetos/${id}/pdf`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                }).then(resp => {
+                    if (!resp.ok) throw new Error('Erro ao gerar PDF');
+                    return resp.blob();
+                });
+            },
         },
         // Atividades
         atividades: {

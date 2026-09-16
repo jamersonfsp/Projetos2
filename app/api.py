@@ -646,6 +646,212 @@ def calcular_inicio_route():
 
 
 # ──────────────────────────────────────────────────────────────
+# Exportar PDF do Projeto
+# ──────────────────────────────────────────────────────────────
+
+@api_bp.route('/projetos/<int:pid>/pdf', methods=['POST'])
+def export_pdf_route(pid):
+    """Gera PDF da ficha do projeto."""
+    data = request.get_json() or {}
+    incluir_atualizacoes = bool(data.get('atualizacoes', False))
+    incluir_cobrancas = bool(data.get('cobrancas', False))
+    db = get_db()
+
+    p = db.execute("SELECT * FROM projetos WHERE ID = ?", (pid,)).fetchone()
+    if not p:
+        return jsonify({'error': 'Projeto não encontrado'}), 404
+
+    atividades = db.execute(
+        "SELECT * FROM atividades WHERE Id_projetos = ? ORDER BY sequencia", (pid,)
+    ).fetchall()
+
+    atualizacoes = []
+    if incluir_atualizacoes:
+        atualizacoes = db.execute(
+            "SELECT * FROM atualizacoes WHERE Id_projetos = ? ORDER BY Data DESC, ID DESC", (pid,)
+        ).fetchall()
+
+    cobrancas = []
+    if incluir_cobrancas:
+        cobrancas = db.execute(
+            "SELECT * FROM cobranca WHERE Id_projetos = ? ORDER BY data DESC", (pid,)
+        ).fetchall()
+
+    # Mapa ID→sequência para dependências
+    id_to_seq = {a['ID']: a['sequencia'] for a in atividades}
+
+    html = _build_pdf_html(p, atividades, atualizacoes, cobrancas, id_to_seq)
+
+    from xhtml2pdf import pisa
+    import io
+    pdf_buffer = io.BytesIO()
+    status = pisa.CreatePDF(html, dest=pdf_buffer)
+    if status.err:
+        return jsonify({'error': 'Erro ao gerar PDF'}), 500
+
+    pdf_buffer.seek(0)
+    from flask import send_file
+    titulo = (p['Titulo'] or 'projeto').strip()[:60]
+    safe_name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in titulo)
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'Projeto_{pid}_{safe_name}.pdf'
+    )
+
+
+def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
+    """Monta o HTML para conversão em PDF."""
+    from app.business import format_date_br, calcular_situacao
+
+    p = projeto
+    sit = calcular_situacao(p['Status'], p['Previsao'], p['Finalizacao'])
+
+    def esc(s):
+        if s is None:
+            return ''
+        return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    # Tabela de atividades
+    ativ_rows = ''
+    for a in atividades:
+        dep_label = str(id_to_seq.get(a['Dependencia'], '—')) if a['Dependencia'] else '—'
+        sit_ativ = calcular_situacao(a['status'], a['Previsao'], a['Finalizacao'])
+        ativ_rows += f'''
+        <tr>
+            <td style="text-align:center">{a["sequencia"]}</td>
+            <td>{esc(a["Atividade"])}</td>
+            <td>{esc(a["Responsavel"])}</td>
+            <td style="text-align:center">{dep_label}</td>
+            <td style="text-align:center">{format_date_br(a["Inicio"])}</td>
+            <td style="text-align:center">{format_date_br(a["Previsao"])}</td>
+            <td style="text-align:center">{a["Duracao"] or 1}</td>
+            <td style="text-align:center">{esc(a["status"])}</td>
+            <td style="text-align:center">{format_date_br(a["Finalizacao"])}</td>
+            <td style="text-align:center">{esc(sit_ativ)}</td>
+        </tr>'''
+
+    if not ativ_rows:
+        ativ_rows = '<tr><td colspan="10" style="text-align:center;padding:12px;color:#888;">Nenhuma atividade cadastrada.</td></tr>'
+
+    # Atualizações
+    atual_html = ''
+    if atualizacoes:
+        atual_items = ''
+        for a in atualizacoes:
+            atual_items += f'<p style="margin:4px 0;"><strong>{format_date_br(a["Data"])}:</strong> {esc(a["Observacao"])}</p>'
+        atual_html = f'''
+        <div style="margin-top:20px;">
+            <h3 style="background:#36373D;color:#fff;padding:8px 12px;font-size:13px;margin:0;">ATUALIZAÇÕES</h3>
+            <div style="border:1px solid #ddd;padding:12px;font-size:11px;">{atual_items}</div>
+        </div>'''
+
+    # Cobranças
+    cobr_html = ''
+    if cobrancas:
+        cobr_items = ''
+        for c in cobrancas:
+            cobr_items += f'<p style="margin:4px 0;"><strong>{format_date_br(c["data"])}:</strong> {esc(c["observacao"])}</p>'
+        cobr_html = f'''
+        <div style="margin-top:20px;">
+            <h3 style="background:#36373D;color:#fff;padding:8px 12px;font-size:13px;margin:0;">COBRANÇAS</h3>
+            <div style="border:1px solid #ddd;padding:12px;font-size:11px;">{cobr_items}</div>
+        </div>'''
+
+    html = f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+        @page {{ size: A4 landscape; margin: 15mm; }}
+        body {{ font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #1a1a1a; }}
+        h1 {{ font-size: 20px; margin: 0 0 4px; color: #36373D; }}
+        h2 {{ font-size: 14px; margin: 16px 0 8px; color: #36373D; border-bottom: 2px solid #E7D264; padding-bottom: 4px; }}
+        .header-bar {{ background: #36373D; color: #fff; padding: 12px 16px; margin-bottom: 16px; }}
+        .header-bar h1 {{ color: #fff; font-size: 18px; }}
+        .header-bar .meta {{ font-size: 11px; opacity: 0.9; margin-top: 4px; }}
+        .dados-grid {{ display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 12px; }}
+        .dados-grid .item {{ min-width: 180px; }}
+        .dados-grid .item label {{ font-size: 10px; color: #888; text-transform: uppercase; display: block; }}
+        .dados-grid .item span {{ font-size: 12px; font-weight: 600; }}
+        .textarea-block {{ margin-bottom: 10px; }}
+        .textarea-block label {{ font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 2px; }}
+        .textarea-block .content {{ border: 1px solid #ddd; padding: 8px; font-size: 11px; min-height: 40px; background: #fafafa; white-space: pre-wrap; }}
+        table {{ width: 100%; border-collapse: collapse; font-size: 10px; }}
+        table th {{ background: #36373D; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }}
+        table td {{ padding: 5px 8px; border-bottom: 1px solid #e5e7eb; }}
+        table tr:nth-child(even) {{ background: #f9fafb; }}
+        .footer {{ margin-top: 20px; font-size: 9px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 6px; }}
+    </style>
+    </head>
+    <body>
+        <div class="header-bar">
+            <h1>FICHA DO PROJETO #{p["ID"]}</h1>
+            <div class="meta">{esc(p["Titulo"])} — {esc(p["Status"])} — {esc(sit)}</div>
+        </div>
+
+        <h2>DADOS DO PROJETO</h2>
+        <div class="dados-grid">
+            <div class="item"><label>Código</label><span>#{p["ID"]}</span></div>
+            <div class="item"><label>Título</label><span>{esc(p["Titulo"])}</span></div>
+            <div class="item"><label>Responsável</label><span>{esc(p["Responsavel"])}</span></div>
+            <div class="item"><label>Setor</label><span>{esc(p["Setor"])}</span></div>
+            <div class="item"><label>Tipo</label><span>{esc(p["Tipo"])}</span></div>
+            <div class="item"><label>Status</label><span>{esc(p["Status"])}</span></div>
+            <div class="item"><label>Situação</label><span>{esc(sit)}</span></div>
+            <div class="item"><label>Início</label><span>{format_date_br(p["Inicio"])}</span></div>
+            <div class="item"><label>Previsão</label><span>{format_date_br(p["Previsao"])}</span></div>
+            <div class="item"><label>Finalização</label><span>{format_date_br(p["Finalizacao"])}</span></div>
+        </div>
+
+        <div class="textarea-block">
+            <label>Descrição</label>
+            <div class="content">{esc(p["Descricao"] or '—')}</div>
+        </div>
+        <div class="textarea-block">
+            <label>Resolução Final</label>
+            <div class="content">{esc(p["Resolucao_Final"] or '—')}</div>
+        </div>
+        <div class="textarea-block">
+            <label>Observação Geral</label>
+            <div class="content">{esc(p["Observacao_Geral"] or '—')}</div>
+        </div>
+
+        <h2>ATIVIDADES</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align:center;width:30px">#</th>
+                    <th>Atividade</th>
+                    <th>Responsável</th>
+                    <th style="text-align:center;width:40px">Dep.</th>
+                    <th style="text-align:center;width:70px">Início</th>
+                    <th style="text-align:center;width:70px">Previsão</th>
+                    <th style="text-align:center;width:35px">Dur.</th>
+                    <th style="text-align:center;width:80px">Status</th>
+                    <th style="text-align:center;width:70px">Finalização</th>
+                    <th style="text-align:center;width:100px">Situação</th>
+                </tr>
+            </thead>
+            <tbody>{ativ_rows}</tbody>
+        </table>
+
+        {atual_html}
+        {cobr_html}
+
+        <div class="footer">Gerado em {{data_geracao}} — Sistema de Controle de Projeto</div>
+    </body>
+    </html>
+    '''
+
+    from datetime import datetime
+    html = html.replace('{data_geracao}', datetime.now().strftime('%d/%m/%Y %H:%M'))
+    return html
+
+
+# ──────────────────────────────────────────────────────────────
 # Modelos de Atividades
 # ──────────────────────────────────────────────────────────────
 

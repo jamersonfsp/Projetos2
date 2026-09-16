@@ -12,3 +12,6 @@ Flask>=3.0.0
 
 # Utilitários
 python-dateutil>=2.8.2
+
+# PDF
+xhtml2pdf>=0.2.16
