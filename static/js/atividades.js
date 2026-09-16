@@ -101,13 +101,6 @@ const AtividadesView = (() => {
                 <div class="ativ-right" id="ativRight">
                     <div class="gantt-header-bar">
                         <span>Gráfico de Gantt</span>
-                        <div style="display:flex;gap:6px;align-items:center">
-                            <select id="fGanttFormat" style="padding:3px 6px;font-size:11px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#fff">
-                                <option value="png" style="color:#1a1a1a">PNG</option>
-                                <option value="jpeg" style="color:#1a1a1a">JPG</option>
-                            </select>
-                            <button class="btn btn-sm" id="btnExportGantt" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:3px 10px;font-size:11px">📥 Exportar</button>
-                        </div>
                     </div>
                     <div class="gantt-scroll" id="ganttScroll">
                         <div class="gantt-body" id="ganttBody"></div>
@@ -119,6 +112,8 @@ const AtividadesView = (() => {
         const footer = [
             App.el('button', { class: 'btn btn-danger', id: 'btnCancelar' }, 'Cancelar'),
             App.el('button', { class: 'btn btn-secondary', id: 'btnAddRow' }, '+ Adicionar linha'),
+            App.el('button', { class: 'btn btn-secondary', id: 'btnExportPng', style: 'margin-left:auto' }, '🖼️ Exportar PNG'),
+            App.el('button', { class: 'btn btn-secondary', id: 'btnExportJpg' }, '🖼️ Exportar JPG'),
             App.el('button', { class: 'btn btn-primary', id: 'btnSalvar' }, 'Salvar Atividades'),
         ];
 
@@ -148,7 +143,8 @@ const AtividadesView = (() => {
         });
 
         document.getElementById('btnImportarModelo').addEventListener('click', () => importarModelo());
-        document.getElementById('btnExportGantt').addEventListener('click', () => exportGantt());
+        document.getElementById('btnExportPng').addEventListener('click', () => exportGantt('png'));
+        document.getElementById('btnExportJpg').addEventListener('click', () => exportGantt('jpeg'));
 
         // Toggle header collapse
         document.getElementById('btnToggleHeader').addEventListener('click', () => {
@@ -974,35 +970,48 @@ const AtividadesView = (() => {
     }
 
     // ─── Exportar Gantt como imagem (PNG/JPG) ───
-    function exportGantt() {
+    // Estilos CSS do Gantt que precisam ser inline para a exportação
+    const GANTT_STYLES = {
+        '.gantt-svg': { background: '#ffffff', fontFamily: 'Segoe UI, Inter, Roboto, system-ui, sans-serif' },
+        '.axis-bg': { fill: '#36373D' },
+        '.axis-text': { fill: '#ffffff', fontSize: '12px', fontWeight: '600', textAnchor: 'middle', fontFamily: 'inherit' },
+        '.axis-text-month': { fill: '#ffffff', fontSize: '13px', fontWeight: '700', textAnchor: 'middle', fontFamily: 'inherit' },
+        '.axis-text-year': { fill: '#ffffff', fontSize: '14px', fontWeight: '700', textAnchor: 'middle', fontFamily: 'inherit' },
+        '.grid-line': { stroke: '#E5E7EB', strokeWidth: '0.5' },
+        '.weekend-col': { fill: '#F3F4F6' },
+        '.bar': { fill: '#E7D264', rx: '4' },
+        '.bar.atrasado': { fill: '#EF4444' },
+        '.bar.finalizado': { fill: '#10B981' },
+        '.bar-label': { fill: '#1A1A1A', fontSize: '12px', fontWeight: '500', fontFamily: 'inherit' },
+        '.previsao-line': { stroke: '#EF4444', strokeWidth: '2', strokeDasharray: '4,3' },
+        '.dep-arrow': { fill: 'none', stroke: '#6B7280', strokeWidth: '1.4', strokeLinecap: 'round', strokeLinejoin: 'round', opacity: '0.85' },
+        '.dep-arrow-head': { fill: '#6B7280', stroke: 'none' },
+    };
+
+    function exportGantt(format) {
         const svgEl = document.querySelector('#ganttBody .gantt-svg');
         if (!svgEl) {
-            App.toast('Nenhum gráfico para exportar', 'warning');
+            App.toast('Nenhum gráfico para exportar. Adicione atividades primeiro.', 'warning');
             return;
         }
 
-        const format = document.getElementById('fGanttFormat').value; // 'png' ou 'jpeg'
         const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
         const ext = format === 'jpeg' ? 'jpg' : 'png';
 
-        // Clona o SVG e inline todos os estilos CSS computados
+        // Clona o SVG
         const svgClone = svgEl.cloneNode(true);
 
-        // Resolve estilos CSS inline (xhtml2pdf-like approach para SVG)
-        const allElements = svgClone.querySelectorAll('*');
-        const origElements = svgEl.querySelectorAll('*');
-        for (let i = 0; i < allElements.length; i++) {
-            const computed = window.getComputedStyle(origElements[i]);
-            const el = allElements[i];
-            // Propriedades essenciais
-            const props = ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size', 'font-weight', 'text-anchor', 'opacity'];
-            props.forEach(p => {
-                const v = computed.getPropertyValue(p);
-                if (v) el.style[p] = v;
+        // Inline estilos CSS: aplica estilos do GANTT_STYLES diretamente nos elementos
+        for (const [selector, styles] of Object.entries(GANTT_STYLES)) {
+            const elements = svgClone.querySelectorAll(selector);
+            elements.forEach(el => {
+                for (const [prop, val] of Object.entries(styles)) {
+                    el.style[prop] = val;
+                }
             });
         }
 
-        // Adiciona fundo branco
+        // Adiciona fundo branco como primeiro elemento
         const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         bg.setAttribute('width', '100%');
         bg.setAttribute('height', '100%');
@@ -1018,7 +1027,7 @@ const AtividadesView = (() => {
             svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
         }
 
-        // Escala para melhor resolução (2x)
+        // Escala 2x para melhor resolução
         const scale = 2;
         const svgWidth = parseInt(svgEl.getAttribute('width')) || 800;
         const svgHeight = parseInt(svgEl.getAttribute('height')) || 400;
@@ -1034,13 +1043,11 @@ const AtividadesView = (() => {
         const url = URL.createObjectURL(blob);
 
         img.onload = () => {
-            // Fundo branco
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, svgWidth, svgHeight);
             ctx.drawImage(img, 0, 0, svgWidth, svgHeight);
             URL.revokeObjectURL(url);
 
-            // Converte canvas para blob e faz download
             canvas.toBlob((downloadBlob) => {
                 if (!downloadBlob) {
                     App.toast('Erro ao gerar imagem', 'error');
@@ -1060,7 +1067,7 @@ const AtividadesView = (() => {
 
         img.onerror = () => {
             URL.revokeObjectURL(url);
-            App.toast('Erro ao processar o gráfico', 'error');
+            App.toast('Erro ao processar o gráfico. Tente novamente.', 'error');
         };
 
         img.src = url;

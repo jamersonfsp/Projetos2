@@ -60,22 +60,7 @@ const API = (() => {
             pausar:    (id)       => request('POST', `/api/projetos/${id}/pausar`),
             cobranca:  (id, data) => request('POST', `/api/projetos/${id}/cobranca`, data),
             atualizacao:(id, data)=> request('POST', `/api/projetos/${id}/atualizacoes`, data),
-            exportPdf: (id, data) => {
-                return fetch(`/api/projetos/${id}/pdf`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data),
-                }).then(resp => {
-                    if (!resp.ok) {
-                        return resp.json().catch(() => { throw new Error('Erro ao gerar PDF'); }).then(j => { throw new Error(j.error || 'Erro ao gerar PDF'); });
-                    }
-                    const cd = resp.headers.get('content-disposition') || '';
-                    let filename = 'projeto.pdf';
-                    const m = cd.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
-                    if (m) filename = decodeURIComponent(m[1].replace(/"/g, ''));
-                    return resp.blob().then(blob => ({ blob, filename }));
-                });
-            },
+            exportPdf: (id, data) => request('POST', `/api/projetos/${id}/pdf`, data),
         },
         // Atividades
         atividades: {

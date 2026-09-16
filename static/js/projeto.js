@@ -899,15 +899,13 @@ const ProjetoView = (() => {
                     cobrancas: incluirCobrancas,
                 });
 
-                // Download do arquivo
-                const url = URL.createObjectURL(result.blob);
+                // Download via URL direta (funciona no pywebview)
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = result.filename || `Projeto_${pid}.pdf`;
+                a.href = result.download_url;
+                a.download = result.filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
 
                 App.toast('PDF gerado com sucesso!', 'success');
                 m.close();

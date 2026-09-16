@@ -648,10 +648,14 @@ def calcular_inicio_route():
 # ──────────────────────────────────────────────────────────────
 # Exportar PDF do Projeto
 # ──────────────────────────────────────────────────────────────
+import os, time, hashlib
+
+# Pasta de exportação dentro do projeto
+EXPORT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'exports')
 
 @api_bp.route('/projetos/<int:pid>/pdf', methods=['POST'])
 def export_pdf_route(pid):
-    """Gera PDF da ficha do projeto."""
+    """Gera PDF da ficha do projeto e salva em disco. Retorna URL para download."""
     data = request.get_json() or {}
     incluir_atualizacoes = bool(data.get('atualizacoes', False))
     incluir_cobrancas = bool(data.get('cobrancas', False))
@@ -689,16 +693,31 @@ def export_pdf_route(pid):
     if status.err:
         return jsonify({'error': 'Erro ao gerar PDF'}), 500
 
-    pdf_buffer.seek(0)
-    from flask import send_file
+    # Salva em disco
+    os.makedirs(EXPORT_DIR, exist_ok=True)
     titulo = (p['Titulo'] or 'projeto').strip()[:60]
     safe_name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in titulo)
-    return send_file(
-        pdf_buffer,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=f'Projeto_{pid}_{safe_name}.pdf'
-    )
+    filename = f'Projeto_{pid}_{safe_name}.pdf'
+    filepath = os.path.join(EXPORT_DIR, filename)
+    pdf_buffer.seek(0)
+    with open(filepath, 'wb') as f:
+        f.write(pdf_buffer.read())
+
+    return jsonify({
+        'ok': True,
+        'filename': filename,
+        'download_url': f'/api/exports/{filename}',
+        'filepath': filepath,
+    })
+
+
+@api_bp.route('/exports/<filename>', methods=['GET'])
+def download_export(filename):
+    """Serve arquivos exportados para download."""
+    from flask import send_from_directory
+    if not os.path.isfile(os.path.join(EXPORT_DIR, filename)):
+        return jsonify({'error': 'Arquivo não encontrado'}), 404
+    return send_from_directory(EXPORT_DIR, filename, as_attachment=True)
 
 
 def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
@@ -779,10 +798,10 @@ def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
         .textarea-block {{ margin-bottom: 10px; }}
         .textarea-block label {{ font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 2px; }}
         .textarea-block .content {{ border: 1px solid #ddd; padding: 8px; font-size: 11px; min-height: 40px; background: #fafafa; white-space: pre-wrap; }}
-        table {{ width: 100%; border-spacing: 0; font-size: 10px; }}
-        table th {{ background: #36373D; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }}
-        table td {{ padding: 5px 8px; border-bottom: 1px solid #e5e7eb; }}
-        table tr:nth-child(even) td {{ background: #f9fafb; }}
+        table {{ width: 100%; font-size: 10px; }}
+        table th {{ background: #36373D; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; border: 1px solid #36373D; }}
+        table td {{ padding: 5px 8px; border: 1px solid #e5e7eb; }}
+        table tr td {{ background: #ffffff; }}
         .footer {{ margin-top: 20px; font-size: 9px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 6px; }}
     </style>
     </head>
