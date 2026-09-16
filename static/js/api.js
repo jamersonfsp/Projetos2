@@ -87,6 +87,8 @@ const API = (() => {
             previsao: (data) => request('POST', '/api/calcular/previsao', data),
             inicio:   (data) => request('POST', '/api/calcular/inicio', data),
         },
+        // Exportar Gantt (envia imagem para servidor)
+        exportGantt: (data) => request('POST', '/api/exports/gantt', data),
         // Modelos de Atividades
         modelos: {
             list:   ()         => request('GET',  '/api/modelos'),

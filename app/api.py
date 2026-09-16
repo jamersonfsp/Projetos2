@@ -720,6 +720,33 @@ def download_export(filename):
     return send_from_directory(EXPORT_DIR, filename, as_attachment=True)
 
 
+@api_bp.route('/exports/gantt', methods=['POST'])
+def export_gantt_route():
+    """Recebe imagem do Gantt em base64, salva e retorna URL de download."""
+    import base64
+    data = request.get_json()
+    if not data or not data.get('image'):
+        return jsonify({'error': 'Dados da imagem não informados'}), 400
+
+    image_b64 = data['image']  # data:image/png;base64,...
+    filename = data.get('filename', 'gantt.png')
+
+    # Remove o prefixo data:image/...;base64,
+    if ',' in image_b64:
+        image_b64 = image_b64.split(',', 1)[1]
+
+    os.makedirs(EXPORT_DIR, exist_ok=True)
+    filepath = os.path.join(EXPORT_DIR, filename)
+    with open(filepath, 'wb') as f:
+        f.write(base64.b64decode(image_b64))
+
+    return jsonify({
+        'ok': True,
+        'filename': filename,
+        'download_url': f'/api/exports/{filename}',
+    })
+
+
 def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
     """Monta o HTML para conversão em PDF."""
     from app.business import format_date_br, calcular_situacao

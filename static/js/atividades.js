@@ -1042,27 +1042,29 @@ const AtividadesView = (() => {
         const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
 
-        img.onload = () => {
+        img.onload = async () => {
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, svgWidth, svgHeight);
             ctx.drawImage(img, 0, 0, svgWidth, svgHeight);
             URL.revokeObjectURL(url);
 
-            canvas.toBlob((downloadBlob) => {
-                if (!downloadBlob) {
-                    App.toast('Erro ao gerar imagem', 'error');
-                    return;
-                }
-                const downloadUrl = URL.createObjectURL(downloadBlob);
+            // Converte canvas para base64 e envia ao servidor
+            const dataUrl = canvas.toDataURL(mimeType, 0.92);
+            const filename = `gantt_projeto_${projetoId}.${ext}`;
+
+            try {
+                const result = await API.exportGantt({ image: dataUrl, filename });
+                // Download via URL direta
                 const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = `gantt_projeto_${projetoId}.${ext}`;
+                a.href = result.download_url;
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
                 App.toast(`Gantt exportado como ${ext.toUpperCase()}!`, 'success');
-            }, mimeType, 0.92);
+            } catch (e) {
+                App.toast('Erro ao exportar: ' + e.message, 'error');
+            }
         };
 
         img.onerror = () => {
