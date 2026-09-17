@@ -271,9 +271,29 @@ Lista de atividades a tratar no dia (ver regras em 3.3). Coluna "Analisar" leva 
 **Botões de ação geral:**
 - **Sair** → volta à Lista de Projetos.
 - **Para Analise** → requer todas as atividades Finalizadas; solicita Resolucao_Final (até 500 chars); status → "Aguardando".
-- **Finalizar** → requer todas as atividades Finalizadas; solicita Observacao_Geral (até 500 chars); Finalizacao = data da última atividade; status → "Finalizado".
+- **Finalizar** → requer todas as atividades Finalizadas; solicita Observacao_Geral (até 500 chars); Finalizacao = data da última atividade; status → "Finalizado". Permitido também a partir de "Aguardando".
 - **Cobranca** → registra data + texto em `cobranca` e atualiza `projetos.cobranca`.
 - **Atualizacoes** → popup para registrar atualização livre.
+- **Pausar / Cancelar** → além de mudar o status do projeto, mudam também o status de todas as atividades "Novo"/"Em Andamento" para "Pausado"/"Cancelado" (Finalizacao = data da ação; atividades Finalizadas são preservadas).
+- **Enviar E-mail / Exportar PDF** → sempre disponíveis, independem do status do projeto.
+
+**Máquina de estados (quais botões ficam ativos por status):**
+
+| Botão | Novo / Em Andamento | Pausado | Cancelado | Aguardando | Finalizado |
+|---|---|---|---|---|---|
+| Sair / E-mail / PDF | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Para Análise | ✓ | ✗ | ✗ | → **Retornar** | ✗ |
+| Finalizar | ✓ | ✗ | ✗ | ✓ | → **Retornar** |
+| Cobrança | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Atualização | ✓ | ✗ | ✗ | ✓ | ✗ |
+| Pausar | ✓ | → **Despausar** | ✗ | ✗ | ✗ |
+| Cancelar | ✓ | ✗ | → **Reativar** | ✗ | ✗ |
+| Excluir | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Esquema (atividades) | edição | consulta | consulta | consulta | consulta |
+
+- **Reativar** (de "Cancelado") e **Despausar** (de "Pausado"): devolvem o projeto e as respectivas atividades para "Em Andamento" (Finalizacao limpa), restaurando todas as funcionalidades.
+- **Retornar** (de "Aguardando" ou "Finalizado"): devolve o projeto para "Novo" ou "Em Andamento" (escolha do usuário); limpa a Finalizacao do projeto; atividades preservadas.
+- Em status bloqueado (Pausado/Cancelado/Aguardando/Finalizado) a tela de atividades abre **somente em consulta** (campos desabilitados, sem incluir/importar) e o botão "Finalizar" de cada atividade é oculto. As regras são também aplicadas no servidor (API retorna erro 400).
 
 ### 5.7 Calendário *(em breve)*
 Placeholder no menu. Implementação futura.
@@ -318,6 +338,8 @@ python main.py
 ```
 
 Na primeira execução, o arquivo `data/sistema.db` é criado automaticamente com todas as tabelas (vazio).
+
+> **Envio de e-mail via Outlook (Windows):** o pacote `pywin32` é instalado automaticamente pelo `requirements.txt` em Windows. Se o Outlook não for detectado, a tela de **Configurações** exibe o motivo e a sugestão de correção (ex.: `pip install pywin32`).
 
 ---
 

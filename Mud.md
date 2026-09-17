@@ -59,3 +59,61 @@ Continuar as correções:
 
 3 - Tela de Atividades: exportar Gráfico de Gantt em JPG ou PNG.
   ✅ IMPLEMENTADO
+
+────────────────────────────────────
+4º Correções — Máquina de estados do projeto + detecção do Outlook
+────────────────────────────────────
+
+1 - Tela do Projeto: controle de status (máquina de estados)
+
+Regras gerais:
+- Sair, Enviar E-mail e Exportar PDF NÃO são afetados pelo status (permanecem sempre ativos).
+- As regras abaixo valem na interface E no servidor (a API rejeita operações bloqueadas com erro 400).
+- "Modo consulta" = a tela de Cadastro de Atividades abre somente para consulta: campos
+  desabilitados, sem "Adicionar linha", sem "Importar" de modelo, sem excluir/arrastar e sem salvar.
+  A exportação do Gantt (PNG/JPG) permanece ativa.
+
+Matriz de botões por status do projeto:
+
+| Botão               | Novo / Em Andamento | Pausado   | Cancelado | Aguardando | Finalizado |
+|---------------------|---------------------|-----------|-----------|------------|------------|
+| Sair / E-mail / PDF | ativo               | ativo     | ativo     | ativo      | ativo      |
+| Para Análise        | ativo               | desativado| desativado| vira RETORNAR | desativado |
+| Finalizar Projeto   | ativo               | desativado| desativado| ativo      | vira RETORNAR |
+| Cobrança            | ativo               | desativado| desativado| desativado | desativado |
+| Atualização         | ativo               | desativado| desativado| ativo      | desativado |
+| Pausar              | ativo               | vira DESPAUSAR | desativado | desativado | desativado |
+| Cancelar            | ativo               | desativado| vira REATIVAR | desativado | desativado |
+| Excluir Projeto     | ativo               | desativado| desativado| desativado | desativado |
+| Esquema (atividades)| edição              | consulta  | consulta  | consulta   | consulta   |
+| Finalizar atividade | ativo               | desativado| desativado| desativado | desativado |
+
+Transições e efeitos:
+- PAUSAR: projeto → "Pausado"; todas as atividades "Novo"/"Em Andamento" → "Pausado"
+  (Finalizacao = data da pausa). Projeto bloqueado até Despausar.
+- DESPAUSAR: projeto → "Em Andamento" (Finalizacao limpa); atividades "Pausadas" →
+  "Em Andamento" (Finalizacao limpa). Todas as funcionalidades voltam.
+- CANCELAR: projeto → "Cancelado"; todas as atividades "Novo"/"Em Andamento" → "Cancelado"
+  (Finalizacao = data do cancelamento). Projeto bloqueado até Reativar.
+- REATIVAR: projeto → "Em Andamento" (Finalizacao limpa); atividades "Canceladas" →
+  "Em Andamento" (Finalizacao limpa). Todas as funcionalidades voltam.
+- PARA ANÁLISE (pré-requisito: todas as atividades finalizadas): projeto → "Aguardando".
+  Bloqueia Cobrança, Pausar, Cancelar e Excluir; Atualização e Finalizar permanecem ativos.
+- RETORNAR (disponível em "Aguardando" e "Finalizado"): o usuário escolhe o novo status
+  ("Novo" ou "Em Andamento"); a data de finalização do projeto é limpa; os status das
+  atividades são preservados (podem ser editados novamente via Esquema).
+- FINALIZAR (pré-requisito: todas as atividades finalizadas; permitido também a partir de
+  "Aguardando"): projeto → "Finalizado". Bloqueia Cobrança, Atualização, Pausar, Cancelar,
+  Excluir e Para Análise.
+
+2 - Outlook não é localizado apesar de instalado
+
+Causa mais provável: o pacote pywin32 (que fornece o módulo win32com) não estava declarado
+no requirements.txt — sem ele a detecção falha silenciosamente.
+
+Correções:
+- pywin32 declarado no requirements.txt (apenas para Windows).
+- Detecção robusta: tenta o ProgID "Outlook.Application" e as versões específicas
+  (Outlook.Application.16/15/14); consulta o registro do Windows para confirmar a instalação.
+- Diagnóstico exibido na tela de Configurações (motivo + sugestão) quando o Outlook
+  não é encontrado (ex.: pywin32 ausente, automação COM bloqueada, novo Outlook web).

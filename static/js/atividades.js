@@ -13,6 +13,7 @@ const AtividadesView = (() => {
     let dataPretendida = '';
     let onCloseCallback = null;
     let modalObj = null;
+    let modoConsulta = false; // true = abre somente para consulta (projeto bloqueado)
 
     // ─── Parse de data SEM timezone (evita off-by-one) ───
     function parseLocalDate(str) {
@@ -29,9 +30,10 @@ const AtividadesView = (() => {
     }
 
     // ─── Abre o modal principal ───
-    async function openModal(pid, onClose) {
+    async function openModal(pid, onClose, opts = {}) {
         projetoId = pid;
         onCloseCallback = onClose;
+        modoConsulta = !!(opts && opts.readonly);
 
         try {
             const data = await API.projetos.get(pid);
@@ -53,6 +55,12 @@ const AtividadesView = (() => {
 
         const body = document.createElement('div');
         body.innerHTML = `
+            ${modoConsulta ? `
+            <div class="consulta-banner">
+                🔒 Projeto <strong>${escapeHtml(projeto.Status || '')}</strong> — somente consulta:
+                as atividades não podem ser incluídas, alteradas ou importadas enquanto o
+                projeto estiver neste status.
+            </div>` : ''}
             <div class="ativ-header-bar" id="ativHeaderBar">
                 <div class="ativ-header-row">
                     <div class="form-group">
@@ -61,16 +69,16 @@ const AtividadesView = (() => {
                     </div>
                     <div class="form-group">
                         <label>Data pretendida</label>
-                        <input type="date" id="fDataPretendida" value="${dataPretendida}">
+                        <input type="date" id="fDataPretendida" value="${dataPretendida}" ${modoConsulta ? 'disabled' : ''}>
                     </div>
                     <div class="form-group" style="flex:1">
                         <label>Importar de Modelo</label>
-                        <select id="fModeloSelect">
+                        <select id="fModeloSelect" ${modoConsulta ? 'disabled' : ''}>
                             <option value="">— Nenhum —</option>
                             ${modelos.map(m => `<option value="${m.ID}">${escapeHtml(m.Nome)}</option>`).join('')}
                         </select>
                     </div>
-                    <button class="btn btn-secondary" id="btnImportarModelo">Importar</button>
+                    <button class="btn btn-secondary" id="btnImportarModelo" ${modoConsulta ? 'disabled' : ''}>Importar</button>
                     <button class="btn-icon-sm" id="btnToggleHeader" title="Recolher/Expandir">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
@@ -110,15 +118,15 @@ const AtividadesView = (() => {
         `;
 
         const footer = [
-            App.el('button', { class: 'btn btn-danger', id: 'btnCancelar' }, 'Cancelar'),
-            App.el('button', { class: 'btn btn-secondary', id: 'btnAddRow' }, '+ Adicionar linha'),
+            App.el('button', { class: 'btn btn-secondary', id: 'btnCancelar' }, modoConsulta ? 'Fechar' : 'Cancelar'),
+            App.el('button', { class: 'btn btn-secondary', id: 'btnAddRow', ...(modoConsulta ? { disabled: 'disabled' } : {}) }, '+ Adicionar linha'),
             App.el('button', { class: 'btn btn-secondary', id: 'btnExportPng', style: 'margin-left:auto' }, '🖼️ Exportar PNG'),
             App.el('button', { class: 'btn btn-secondary', id: 'btnExportJpg' }, '🖼️ Exportar JPG'),
-            App.el('button', { class: 'btn btn-primary', id: 'btnSalvar' }, 'Salvar Atividades'),
+            App.el('button', { class: 'btn btn-primary', id: 'btnSalvar', ...(modoConsulta ? { disabled: 'disabled' } : {}) }, 'Salvar Atividades'),
         ];
 
         modalObj = App.modal({
-            title: `Cadastro de Atividades — ${projeto.Titulo}`,
+            title: `Cadastro de Atividades — ${projeto.Titulo}${modoConsulta ? ' (consulta)' : ''}`,
             size: 'xl',
             body,
             footer,
@@ -136,6 +144,12 @@ const AtividadesView = (() => {
         document.getElementById('btnAddRow').addEventListener('click', () => addRow());
         document.getElementById('btnSalvar').addEventListener('click', salvar);
         document.getElementById('btnCancelar').addEventListener('click', () => {
+            if (modoConsulta) {
+                // Consulta: apenas fecha (nada a perder)
+                modalObj.close();
+                if (onCloseCallback) onCloseCallback();
+                return;
+            }
             if (App.confirm('Cancelar toda a operação? As alterações não salvas serão perdidas.')) {
                 modalObj.close();
                 if (onCloseCallback) onCloseCallback();
@@ -179,6 +193,10 @@ const AtividadesView = (() => {
         App.clear(tbody);
 
         if (atividades.length === 0) {
+            if (modoConsulta) {
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted" style="padding:18px">Nenhuma atividade cadastrada.</td></tr>';
+                return;
+            }
             addRow();
             return;
         }
@@ -199,7 +217,8 @@ const AtividadesView = (() => {
     function createRow(a, seq) {
         const isFinalizado = a.status === 'Finalizado';
         const isLoaded = !!a.ID; // veio do banco de dados
-        const tr = App.el('tr', { 'data-seq': seq, draggable: isFinalizado ? 'false' : 'true' });
+        const isLocked = isFinalizado || modoConsulta; // campos desabilitados
+        const tr = App.el('tr', { 'data-seq': seq, draggable: isLocked ? 'false' : 'true' });
         tr.dataset.ativId = a.ID || '';
         if (isFinalizado) tr.classList.add('row-finalizado');
 
@@ -211,13 +230,13 @@ const AtividadesView = (() => {
         tdAtiv.appendChild(App.el('input', {
             type: 'text', name: 'Atividade',
             value: a.Atividade || '', placeholder: 'Descrição',
-            ...(isFinalizado ? { disabled: 'disabled' } : {})
+            ...(isLocked ? { disabled: 'disabled' } : {})
         }));
         tr.appendChild(tdAtiv);
 
         // Responsável
         const tdResp = App.el('td', { class: 'col-resp' });
-        const selResp = App.el('select', { name: 'Responsavel', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
+        const selResp = App.el('select', { name: 'Responsavel', ...(isLocked ? { disabled: 'disabled' } : {}) });
         selResp.appendChild(App.el('option', { value: '' }, '—'));
         responsaveis.forEach(r => {
             const o = App.el('option', { value: r.Nome }, r.Nome);
@@ -230,7 +249,7 @@ const AtividadesView = (() => {
         // Dependência — agora construído a partir do DOM (linhas existentes)
         const tdDep = App.el('td', { class: 'col-dep' });
         const selDep = buildDepSelect(seq, depIdToSeq(a.Dependencia) || null, !!a.ID);
-        if (isFinalizado) selDep.disabled = true;
+        if (isLocked) selDep.disabled = true;
         tdDep.appendChild(selDep);
         tr.appendChild(tdDep);
 
@@ -238,7 +257,7 @@ const AtividadesView = (() => {
         const tdIni = App.el('td', { class: 'col-ini' });
         const inpIni = App.el('input', {
             type: 'date', name: 'Inicio', value: a.Inicio || '',
-            ...(isFinalizado ? { disabled: 'disabled' } : {})
+            ...(isLocked ? { disabled: 'disabled' } : {})
         });
         tdIni.appendChild(inpIni);
         tr.appendChild(tdIni);
@@ -248,7 +267,7 @@ const AtividadesView = (() => {
         const inpDur = App.el('input', {
             type: 'number', name: 'Duracao', min: '1',
             value: String(a.Duracao || 1),
-            ...(isFinalizado ? { disabled: 'disabled' } : {})
+            ...(isLocked ? { disabled: 'disabled' } : {})
         });
         tdDur.appendChild(inpDur);
         tr.appendChild(tdDur);
@@ -264,8 +283,8 @@ const AtividadesView = (() => {
 
         // Status
         const tdSt = App.el('td', { class: 'col-status' });
-        const selSt = App.el('select', { name: 'status', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
-        ['Novo', 'Em Andamento', 'Finalizado'].forEach(s => {
+        const selSt = App.el('select', { name: 'status', ...(isLocked ? { disabled: 'disabled' } : {}) });
+        ['Novo', 'Em Andamento', 'Finalizado'].concat(modoConsulta && a.status && ['Novo','Em Andamento','Finalizado'].indexOf(a.status) < 0 ? [a.status] : []).forEach(s => {
             const o = App.el('option', { value: s }, s);
             if ((a.status || 'Novo') === s) o.selected = true;
             selSt.appendChild(o);
@@ -275,21 +294,21 @@ const AtividadesView = (() => {
 
         // Sábado
         const tdSab = App.el('td', { class: 'col-chk' });
-        const chkSab = App.el('input', { type: 'checkbox', name: 'Sabado', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
+        const chkSab = App.el('input', { type: 'checkbox', name: 'Sabado', ...(isLocked ? { disabled: 'disabled' } : {}) });
         chkSab.checked = a.Sabado !== 0;
         tdSab.appendChild(chkSab);
         tr.appendChild(tdSab);
 
         // Domingo
         const tdDom = App.el('td', { class: 'col-chk' });
-        const chkDom = App.el('input', { type: 'checkbox', name: 'Domingo', ...(isFinalizado ? { disabled: 'disabled' } : {}) });
+        const chkDom = App.el('input', { type: 'checkbox', name: 'Domingo', ...(isLocked ? { disabled: 'disabled' } : {}) });
         chkDom.checked = a.Domingo !== 0;
         tdDom.appendChild(chkDom);
         tr.appendChild(tdDom);
 
-        // Excluir (oculto para finalizadas)
+        // Excluir (oculto para finalizadas e em modo consulta)
         const tdDel = App.el('td', { class: 'col-act' });
-        if (!isFinalizado) {
+        if (!isFinalizado && !modoConsulta) {
             const btnDel = App.el('button', { class: 'btn-del', title: 'Excluir' }, '✕');
             btnDel.addEventListener('click', () => {
                 if (App.confirm('Excluir esta atividade?')) {
@@ -299,8 +318,10 @@ const AtividadesView = (() => {
                 }
             });
             tdDel.appendChild(btnDel);
-        } else {
+        } else if (isFinalizado) {
             tdDel.innerHTML = '<span class="badge badge-success" style="font-size:10px">OK</span>';
+        } else {
+            tdDel.innerHTML = '<span class="text-muted">—</span>';
         }
         tr.appendChild(tdDel);
 
@@ -407,6 +428,7 @@ const AtividadesView = (() => {
 
     // ─── Adiciona nova linha (com dependência automática na anterior) ───
     function addRow() {
+        if (modoConsulta) return; // consulta: não permite incluir
         const tbody = document.getElementById('ativBody');
         const seq = tbody.children.length + 1;
 
@@ -579,6 +601,7 @@ const AtividadesView = (() => {
 
     // ─── Importar atividades de um modelo ───
     async function importarModelo() {
+        if (modoConsulta) return; // consulta: não permite importar
         const sel = document.getElementById('fModeloSelect');
         const modeloId = sel.value;
         if (!modeloId) {

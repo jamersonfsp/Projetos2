@@ -364,6 +364,22 @@ const ProjetoView = (() => {
             const atividades = data.atividades;
             const atualizacoes = data.atualizacoes;
 
+            // ─── Máquina de estados dos botões ───
+            const st = p.Status || 'Novo';
+            const isNovoOuEA = (st === 'Novo' || st === 'Em Andamento');
+            const isAguardando = (st === 'Aguardando');
+            const isFinalizado = (st === 'Finalizado');
+            const isPausado = (st === 'Pausado');
+            const isCancelado = (st === 'Cancelado');
+            const editavel = isNovoOuEA; // Aguardando/Finalizado/Pausado/Cancelado bloqueiam alterações
+            const dis = (ativo) => ativo ? '' : 'disabled';
+
+            const hintBloq = !editavel
+                ? `<div class="status-lock-note">🔒 Projeto <strong>${st}</strong> — ações bloqueadas. Use ${
+                    isCancelado ? '<strong>Reativar</strong>' : isPausado ? '<strong>Despausar</strong>' : '<strong>Retornar</strong>'
+                  } para devolver o projeto ao fluxo. Sair, Enviar E-mail e Exportar PDF permanecem ativos.</div>`
+                : '';
+
             // Mapa: ID da atividade → número de sequência (para exibir dependência)
             const idToSeq = {};
             atividades.forEach(a => { idToSeq[a.ID] = a.sequencia; });
@@ -421,7 +437,7 @@ const ProjetoView = (() => {
                             <div class="card-header">
                                 <h3>Atividades</h3>
                                 <div class="actions">
-                                    <button class="btn btn-sm btn-secondary" id="btnEsquema">Esquema (editar atividades)</button>
+                                    <button class="btn btn-sm btn-secondary" id="btnEsquema">${editavel ? 'Esquema (editar atividades)' : 'Esquema (consulta)'}</button>
                                 </div>
                             </div>
                             <div class="atividades-scroll">
@@ -459,7 +475,7 @@ const ProjetoView = (() => {
                                                 <td>${a.Sabado ? '✓' : '—'}</td>
                                                 <td>${a.Domingo ? '✓' : '—'}</td>
                                                 <td>
-                                                    ${a.status !== 'Finalizado' ? `<button class="btn btn-sm btn-warning" onclick="ProjetoView.finalizarAtividade(${a.ID})">Finalizar</button>` : '<span class="badge badge-success">OK</span>'}
+                                                    ${editavel && a.status !== 'Finalizado' ? `<button class="btn btn-sm btn-warning" onclick="ProjetoView.finalizarAtividade(${a.ID})">Finalizar</button>` : (a.status === 'Finalizado' ? '<span class="badge badge-success">OK</span>' : '—')}
                                                 </td>
                                             </tr>
                                         `).join('') : `<tr><td colspan="13" class="text-center text-muted">Nenhuma atividade. Clique em "Esquema".</td></tr>`}
@@ -469,14 +485,23 @@ const ProjetoView = (() => {
                         </div>
 
                         <div class="acoes-gerais">
+                            ${hintBloq}
                             <button class="btn btn-secondary" onclick="App.navigate('/projetos')">Sair</button>
-                            <button class="btn btn-warning" id="btnAnalise">Para Análise</button>
-                            <button class="btn btn-success" id="btnFinalizar">Finalizar Projeto</button>
-                            <button class="btn btn-primary" id="btnCobranca">Cobrança</button>
-                            <button class="btn btn-secondary" id="btnAtualizacao">Atualização</button>
-                            <button class="btn btn-secondary" id="btnPausar">Pausar</button>
-                            <button class="btn btn-warning" id="btnCancelar">Cancelar</button>
-                            <button class="btn btn-danger" id="btnExcluir">Excluir Projeto</button>
+                            ${isAguardando
+                                ? '<button class="btn btn-warning" id="btnRetornar" title="Devolve o projeto a Novo ou Em Andamento">↩️ Retornar</button>'
+                                : `<button class="btn btn-warning" id="btnAnalise" ${dis(editavel)} ${editavel ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento"'}>Para Análise</button>`}
+                            ${isFinalizado
+                                ? '<button class="btn btn-success" id="btnRetornar" title="Devolve o projeto a Novo ou Em Andamento">↩️ Retornar</button>'
+                                : `<button class="btn btn-success" id="btnFinalizar" ${dis(editavel || isAguardando)} ${editavel || isAguardando ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento/Aguardando"'}>Finalizar Projeto</button>`}
+                            <button class="btn btn-primary" id="btnCobranca" ${dis(editavel)} ${editavel ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento"'}>Cobrança</button>
+                            <button class="btn btn-secondary" id="btnAtualizacao" ${dis(editavel || isAguardando)} ${editavel || isAguardando ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento/Aguardando"'}>Atualização</button>
+                            ${isPausado
+                                ? '<button class="btn btn-secondary" id="btnDespausar" title="Devolve o projeto e as atividades pausadas para Em Andamento">▶️ Despausar</button>'
+                                : `<button class="btn btn-secondary" id="btnPausar" ${dis(editavel)} ${editavel ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento"'}>Pausar</button>`}
+                            ${isCancelado
+                                ? '<button class="btn btn-warning" id="btnReativar" title="Devolve o projeto e as atividades canceladas para Em Andamento">🔄 Reativar</button>'
+                                : `<button class="btn btn-warning" id="btnCancelar" ${dis(editavel)} ${editavel ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento"'}>Cancelar</button>`}
+                            <button class="btn btn-danger" id="btnExcluir" ${dis(editavel)} ${editavel ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento"'}>Excluir Projeto</button>
                             <button class="btn btn-primary" id="btnEnviarEmail" style="margin-left:auto;background:#0078D4;color:#fff;border-color:#0078D4;">📧 Enviar E-mail</button>
                             <button class="btn btn-primary" id="btnExportPdf" style="background:#E7D264;color:#1a1a1a;border-color:#E7D264;">📄 Exportar PDF</button>
                         </div>
@@ -505,15 +530,28 @@ const ProjetoView = (() => {
 
             // Eventos
             document.getElementById('btnEsquema').addEventListener('click', () => {
-                AtividadesView.openModal(pid, () => renderTela(pid));
+                // Projetos bloqueados abrem a tela de atividades somente em consulta
+                AtividadesView.openModal(pid, () => renderTela(pid), { readonly: !editavel });
             });
             document.getElementById('btnVerAtualizacoes').addEventListener('click', () => verAtualizacoes(pid));
-            document.getElementById('btnAnalise').addEventListener('click', () => analise(pid));
-            document.getElementById('btnFinalizar').addEventListener('click', () => finalizar(pid));
+
+            const elAnalise = document.getElementById('btnAnalise');
+            if (elAnalise) elAnalise.addEventListener('click', () => analise(pid));
+            const elFinalizar = document.getElementById('btnFinalizar');
+            if (elFinalizar) elFinalizar.addEventListener('click', () => finalizar(pid));
+            const elRetornar = document.getElementById('btnRetornar');
+            if (elRetornar) elRetornar.addEventListener('click', () => retornar(pid, st));
+            const elPausar = document.getElementById('btnPausar');
+            if (elPausar) elPausar.addEventListener('click', () => pausar(pid));
+            const elDespausar = document.getElementById('btnDespausar');
+            if (elDespausar) elDespausar.addEventListener('click', () => despausar(pid));
+            const elCancelar = document.getElementById('btnCancelar');
+            if (elCancelar) elCancelar.addEventListener('click', () => cancelar(pid));
+            const elReativar = document.getElementById('btnReativar');
+            if (elReativar) elReativar.addEventListener('click', () => reativar(pid));
+
             document.getElementById('btnCobranca').addEventListener('click', () => cobranca(pid));
             document.getElementById('btnAtualizacao').addEventListener('click', () => atualizacao(pid));
-            document.getElementById('btnPausar').addEventListener('click', () => pausar(pid));
-            document.getElementById('btnCancelar').addEventListener('click', () => cancelar(pid));
             document.getElementById('btnExcluir').addEventListener('click', () => excluir(pid));
             document.getElementById('btnExportPdf').addEventListener('click', () => exportPdf(pid));
             document.getElementById('btnEnviarEmail').addEventListener('click', () => enviarEmail(pid));
@@ -709,29 +747,63 @@ const ProjetoView = (() => {
             size: 'md',
             body: `
                 <p class="text-sm text-muted mb-3">
-                    O projeto e todas as atividades <strong>não finalizadas</strong> receberão o status
-                    <strong>"Pausado"</strong> e a data de finalização será registrada como hoje.
+                    O projeto passará para o status <strong>"Pausado"</strong> e todas as atividades com status
+                    <strong>"Novo"</strong> ou <strong>"Em Andamento"</strong> também serão pausadas
+                    (atividades já finalizadas são preservadas).
                 </p>
-                <p class="text-sm">Atividades já finalizadas serão preservadas.</p>
+                <p class="text-sm mb-3">Enquanto estiver pausado, o projeto <strong>não poderá sofrer alterações</strong>
+                (Para Análise, Finalizar, Cobrança, Atualização, Cancelar e Excluir ficam desativados e a tela de
+                atividades abre somente para consulta). Use o botão <strong>Despausar</strong> para retomar.</p>
                 <div class="form-group">
                     <label>Observação (opcional)</label>
                     <textarea id="fObs" rows="3" placeholder="Motivo da pausa..."></textarea>
                 </div>
             `,
             footer: [
-                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Cancelar'),
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Voltar'),
                 App.el('button', { class: 'btn btn-secondary', id: 'btnSavePausar' }, 'Pausar Projeto'),
             ]
         });
         document.getElementById('btnSavePausar').addEventListener('click', async () => {
             const obs = document.getElementById('fObs').value.trim();
             try {
-                await API.projetos.pausar(pid);
-                // Registra a observação como atualização, se informada
-                if (obs) {
-                    await API.projetos.atualizacao(pid, { data: App.todayISO(), observacao: `Pausa: ${obs}` });
-                }
+                await API.projetos.pausar(pid, { observacao: obs });
                 App.toast('Projeto pausado', 'success');
+                m.close();
+                renderTela(pid);
+            } catch (e) {
+                App.toast('Erro: ' + e.message, 'error');
+            }
+        });
+    }
+
+    // ─── DESPAUSAR PROJETO ───
+    function despausar(pid) {
+        const m = App.modal({
+            title: 'Despausar Projeto',
+            size: 'md',
+            body: `
+                <p class="text-sm text-muted mb-3">
+                    O projeto voltará para o status <strong>"Em Andamento"</strong> e todas as atividades que
+                    foram pausadas também retornarão para <strong>"Em Andamento"</strong>, liberando novamente
+                    todas as funcionalidades (Para Análise, Finalizar, Cobrança, Atualização, Cancelar, Excluir
+                    e edição de atividades).
+                </p>
+                <div class="form-group">
+                    <label>Observação (opcional)</label>
+                    <textarea id="fObs" rows="3" placeholder="Motivo da retomada..."></textarea>
+                </div>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Voltar'),
+                App.el('button', { class: 'btn btn-success', id: 'btnSaveDespausar' }, '▶️ Despausar Projeto'),
+            ]
+        });
+        document.getElementById('btnSaveDespausar').addEventListener('click', async () => {
+            const obs = document.getElementById('fObs').value.trim();
+            try {
+                await API.projetos.despausar(pid, { observacao: obs });
+                App.toast('Projeto despausado — todas as funcionalidades foram liberadas', 'success');
                 m.close();
                 renderTela(pid);
             } catch (e) {
@@ -747,28 +819,110 @@ const ProjetoView = (() => {
             size: 'md',
             body: `
                 <p class="text-sm text-muted mb-3">
-                    O projeto e todas as atividades <strong>não finalizadas</strong> receberão o status
-                    <strong>"Cancelado"</strong> e a data de finalização será registrada como hoje.
+                    O projeto passará para o status <strong>"Cancelado"</strong> e todas as atividades com status
+                    <strong>"Novo"</strong> ou <strong>"Em Andamento"</strong> também serão canceladas
+                    (atividades já finalizadas são preservadas).
                 </p>
-                <p class="text-sm">Atividades já finalizadas serão preservadas.</p>
+                <p class="text-sm mb-3">Enquanto estiver cancelado, o projeto <strong>não poderá sofrer alterações</strong>
+                (Para Análise, Finalizar, Cobrança, Atualização, Pausar e Excluir ficam desativados e a tela de
+                atividades abre somente para consulta). Use o botão <strong>Reativar</strong> para reverter.</p>
                 <div class="form-group">
                     <label>Observação (opcional)</label>
                     <textarea id="fObs" rows="3" placeholder="Motivo do cancelamento..."></textarea>
                 </div>
             `,
             footer: [
-                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Cancelar'),
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Voltar'),
                 App.el('button', { class: 'btn btn-warning', id: 'btnSaveCancelar' }, 'Cancelar Projeto'),
             ]
         });
         document.getElementById('btnSaveCancelar').addEventListener('click', async () => {
             const obs = document.getElementById('fObs').value.trim();
             try {
-                await API.projetos.cancelar(pid);
-                if (obs) {
-                    await API.projetos.atualizacao(pid, { data: App.todayISO(), observacao: `Cancelamento: ${obs}` });
-                }
+                await API.projetos.cancelar(pid, { observacao: obs });
                 App.toast('Projeto cancelado', 'success');
+                m.close();
+                renderTela(pid);
+            } catch (e) {
+                App.toast('Erro: ' + e.message, 'error');
+            }
+        });
+    }
+
+    // ─── REATIVAR PROJETO ───
+    function reativar(pid) {
+        const m = App.modal({
+            title: 'Reativar Projeto',
+            size: 'md',
+            body: `
+                <p class="text-sm text-muted mb-3">
+                    O projeto voltará para o status <strong>"Em Andamento"</strong> e todas as atividades que
+                    foram canceladas retornarão para <strong>"Em Andamento"</strong>, liberando novamente
+                    todas as funcionalidades (Para Análise, Finalizar, Cobrança, Atualização, Pausar, Excluir
+                    e edição de atividades).
+                </p>
+                <div class="form-group">
+                    <label>Observação (opcional)</label>
+                    <textarea id="fObs" rows="3" placeholder="Motivo da reativação..."></textarea>
+                </div>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Voltar'),
+                App.el('button', { class: 'btn btn-warning', id: 'btnSaveReativar' }, '🔄 Reativar Projeto'),
+            ]
+        });
+        document.getElementById('btnSaveReativar').addEventListener('click', async () => {
+            const obs = document.getElementById('fObs').value.trim();
+            try {
+                await API.projetos.reativar(pid, { observacao: obs });
+                App.toast('Projeto reativado — todas as funcionalidades foram liberadas', 'success');
+                m.close();
+                renderTela(pid);
+            } catch (e) {
+                App.toast('Erro: ' + e.message, 'error');
+            }
+        });
+    }
+
+    // ─── RETORNAR PROJETO (de Aguardando/Finalizado) ───
+    function retornar(pid, deStatus) {
+        const m = App.modal({
+            title: 'Retornar Projeto ao Fluxo',
+            size: 'md',
+            body: `
+                <p class="text-sm text-muted mb-3">
+                    O projeto sairá do status <strong>${deStatus}</strong> e voltará a ser editável.
+                    Escolha para qual status ele deve retornar:
+                </p>
+                <div class="form-group mb-3">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;margin-bottom:10px">
+                        <input type="radio" name="fNovoStatus" value="Em Andamento" checked style="width:auto">
+                        <span><strong>Em Andamento</strong> — o projeto segue em execução</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+                        <input type="radio" name="fNovoStatus" value="Novo" style="width:auto">
+                        <span><strong>Novo</strong> — o projeto (re)começa do início</span>
+                    </label>
+                </div>
+                <p class="text-sm text-muted mb-3">A data de finalização do projeto será limpa. Os status das
+                atividades são preservados e poderão ser editados novamente via Esquema.</p>
+                <div class="form-group">
+                    <label>Observação (opcional)</label>
+                    <textarea id="fObs" rows="3" placeholder="Motivo do retorno..."></textarea>
+                </div>
+            `,
+            footer: [
+                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Voltar'),
+                App.el('button', { class: 'btn btn-warning', id: 'btnSaveRetornar' }, '↩️ Retornar Projeto'),
+            ]
+        });
+        document.getElementById('btnSaveRetornar').addEventListener('click', async () => {
+            const sel = document.querySelector('input[name="fNovoStatus"]:checked');
+            const novoStatus = sel ? sel.value : 'Em Andamento';
+            const obs = document.getElementById('fObs').value.trim();
+            try {
+                await API.projetos.retornar(pid, { status: novoStatus, observacao: obs });
+                App.toast(`Projeto retornado para "${novoStatus}"`, 'success');
                 m.close();
                 renderTela(pid);
             } catch (e) {

@@ -14,6 +14,7 @@ const ConfigView = (() => {
         } catch (e) {}
 
         const outlookOk = emailCfg.outlook_disponivel;
+        const outlookDet = emailCfg.outlook_detalhe || {};
         const metodo = emailCfg.metodo || 'auto';
 
         view.innerHTML = `
@@ -35,6 +36,11 @@ const ConfigView = (() => {
                                 <strong>Outlook (recomendado)</strong>
                                 <span class="badge ${outlookOk ? 'badge-success' : 'badge-danger'}" style="margin-left:8px">${outlookOk ? '✓ Disponível' : '✗ Não encontrado'}</span>
                                 <p class="text-sm text-muted" style="margin:4px 0 0">Usa o Outlook instalado na máquina. Não precisa configurar senha.</p>
+                                ${!outlookOk && outlookDet.motivo ? `
+                                <p class="text-sm" style="margin:6px 0 0;color:var(--danger)"><strong>${outlookDet.motivo}</strong></p>
+                                ${outlookDet.sugestao ? `<p class="text-sm text-muted" style="margin:4px 0 0">${outlookDet.sugestao}</p>` : ''}
+                                ` : ''}
+                                ${outlookOk && outlookDet.progid ? `<p class="text-sm text-muted" style="margin:4px 0 0">Detectado via ${outlookDet.progid}${outlookDet.pywin32_versao ? ` (pywin32 ${outlookDet.pywin32_versao})` : ''}.</p>` : ''}
                             </div>
                         </label>
                     </div>

@@ -34,15 +34,171 @@ def save_config(config):
 
 
 def is_outlook_available():
-    """Verifica se o Outlook está disponível via win32com."""
+    """Verifica se o Outlook está disponível (via COM win32com)."""
+    return outlook_diagnostics().get('com', False)
+
+
+# ProgIDs do Outlook: genérico + versões específicas (16=Office 2016/2019/2021/365,
+# 15=Office 2013, 14=Office 2010). Algumas instalações só respondem à versão específica.
+_OUTLOOK_PROGIDS = ['Outlook.Application',
+                    'Outlook.Application.16',
+                    'Outlook.Application.15',
+                    'Outlook.Application.14']
+
+# Cache do ProgID que funcionou (evita tentar todos a cada chamada)
+_working_progid = None
+
+
+def _registry_outlook_info():
+    """Consulta o registro do Windows para confirmar que o Outlook (clássico)
+    está instalado. Retorna {'instalado': bool, 'curver': str|None}."""
+    info = {'instalado': False, 'curver': None}
     if platform.system() != 'Windows':
-        return False
+        return info
+    try:
+        import winreg
+    except ImportError:
+        return info
+
+    # HKEY_CLASSES_ROOT\Outlook.Application (mescla HKLM/HKCU\Software\Classes)
+    # Tenta as duas vistas (64 bits e 32 bits) para cobrir Python x Office com
+    # arquiteturas diferentes.
+    for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+        try:
+            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, 'Outlook.Application',
+                                0, winreg.KEY_READ | view):
+                info['instalado'] = True
+                try:
+                    with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT,
+                                        r'Outlook.Application\CurVer',
+                                        0, winreg.KEY_READ | view) as ck:
+                        info['curver'] = winreg.QueryValueEx(ck, '')[0]
+                except OSError:
+                    pass
+                break
+        except OSError:
+            continue
+
+    if not info['instalado']:
+        # Fallback: chave de instalação do Office (Click-to-Run ou MSI)
+        for subkey in (r'SOFTWARE\Microsoft\Office',
+                       r'SOFTWARE\Microsoft\Office\ClickToRun\Configuration'):
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, subkey,
+                                    0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY):
+                    info['instalado'] = True
+                    break
+            except OSError:
+                continue
+    return info
+
+
+def _try_dispatch(progid):
+    """Tenta criar o objeto COM do Outlook. Retorna o objeto ou None."""
     try:
         import win32com.client
-        outlook = win32com.client.Dispatch("Outlook.Application")
-        return True
+        return win32com.client.Dispatch(progid)
     except Exception:
-        return False
+        return None
+
+
+def outlook_diagnostics():
+    """
+    Diagnóstico completo da detecção do Outlook.
+    Retorna dict com: plataforma, pywin32, pywin32_versao, com, progid,
+    registro, registro_versao, motivo e sugestao.
+    """
+    global _working_progid
+    diag = {
+        'plataforma': platform.system(),
+        'pywin32': False,
+        'pywin32_versao': None,
+        'com': False,
+        'progid': None,
+        'registro': False,
+        'registro_versao': None,
+        'motivo': '',
+        'sugestao': '',
+    }
+
+    if platform.system() != 'Windows':
+        diag['motivo'] = 'O sistema não está rodando em Windows.'
+        diag['sugestao'] = ('A automação do Outlook só funciona em Windows. '
+                            'Use o método SMTP nesta máquina.')
+        return diag
+
+    # 1) pywin32 instalado?
+    try:
+        import win32com.client  # noqa: F401
+        diag['pywin32'] = True
+        try:
+            from importlib.metadata import version as _pkg_version
+            diag['pywin32_versao'] = _pkg_version('pywin32')
+        except Exception:
+            pass
+    except ImportError:
+        reg = _registry_outlook_info()
+        diag['registro'] = reg['instalado']
+        diag['registro_versao'] = reg['curver']
+        diag['motivo'] = ('O pacote pywin32 não está instalado nesta máquina — sem ele '
+                          'o Python não consegue conversar com o Outlook (win32com não encontrado).')
+        diag['sugestao'] = ('Instale com: pip install pywin32  —  e se for a primeira vez, '
+                            'execute também: python -m pywin32_postinstall -install')
+        return diag
+
+    # 2) COM responde? (tenta o ProgID que funcionou antes, depois os demais)
+    progids = ([_working_progid] if _working_progid else []) + \
+              [p for p in _OUTLOOK_PROGIDS if p != _working_progid]
+    for pid_ in progids:
+        app = _try_dispatch(pid_)
+        if app is not None:
+            _working_progid = pid_
+            diag['com'] = True
+            diag['progid'] = pid_
+            return diag
+
+    # 3) COM não respondeu — o Outlook está ao menos registrado?
+    reg = _registry_outlook_info()
+    diag['registro'] = reg['instalado']
+    diag['registro_versao'] = reg['curver']
+    if reg['instalado']:
+        diag['motivo'] = ('O Outlook está instalado, mas a automação COM não respondeu '
+                          '(ProgIDs testados: ' + ', '.join(_OUTLOOK_PROGIDS) + ').')
+        diag['sugestao'] = ('Verifique: (1) abra o Outlook manualmente ao menos uma vez e '
+                            'configure uma conta; (2) Python e Outlook devem ter a mesma '
+                            'arquitetura (64 bits com 64 bits); (3) evite executar o sistema '
+                            'como administrador enquanto o Outlook abre como usuário normal '
+                            '(ou vice-versa); (4) verifique se algum antivírus/política '
+                            'corporativa bloqueia automação COM. Obs.: o "novo Outlook" '
+                            '(aplicativo web) não suporta automação — use o Outlook clássico.')
+    else:
+        diag['motivo'] = ('O Outlook clássico não está registrado no Windows '
+                          '(nenhum ProgID Outlook.Application encontrado no registro).')
+        diag['sugestao'] = ('Instale/repare o Outlook clássico (desktop). O "novo Outlook" '
+                            '(aplicativo web) não suporta automação COM; nesse caso, use o '
+                            'método SMTP.')
+    return diag
+
+
+def _get_outlook_app():
+    """Retorna a aplicação Outlook via COM, tentando os ProgIDs conhecidos."""
+    import win32com.client
+    progids = ([_working_progid] if _working_progid else []) + \
+              [p for p in _OUTLOOK_PROGIDS if p != _working_progid]
+    last_exc = None
+    for pid_ in progids:
+        try:
+            app = win32com.client.Dispatch(pid_)
+            _set_working_progid(pid_)
+            return app
+        except Exception as e:
+            last_exc = e
+    raise last_exc
+
+
+def _set_working_progid(progid):
+    global _working_progid
+    _working_progid = progid
 
 
 def send_via_outlook(to_addrs, subject, html_body, attachments=None):
@@ -50,9 +206,7 @@ def send_via_outlook(to_addrs, subject, html_body, attachments=None):
     Envia e-mail usando o Outlook instalado na máquina via win32com.
     Não requer senha — usa a conta já configurada no Outlook.
     """
-    import win32com.client
-
-    outlook = win32com.client.Dispatch("Outlook.Application")
+    outlook = _get_outlook_app()
     mail = outlook.CreateItem(0)  # 0 = olMailItem
 
     # Destinatários (separados por ;)

@@ -16,6 +16,23 @@ def row_to_dict(row):
     return d
 
 
+def _status_projeto(db, pid):
+    row = db.execute("SELECT Status FROM projetos WHERE ID = ?", (pid,)).fetchone()
+    return row['Status'] if row else None
+
+
+def _exigir_editavel(pid):
+    """Retorna resposta de erro (400) caso o projeto esteja em um status
+    bloqueado (Pausado/Cancelado/Aguardando/Finalizado). None = liberado."""
+    db = get_db()
+    st = _status_projeto(db, pid)
+    if st is None:
+        return jsonify({'error': 'Projeto não encontrado'}), 404
+    if st not in ('Novo', 'Em Andamento'):
+        return jsonify({'error': f"Projeto em status '{st}' não pode sofrer alterações."}), 400
+    return None
+
+
 # ──────────────────────────────────────────────────────────────
 # Responsáveis
 # ──────────────────────────────────────────────────────────────
@@ -221,6 +238,10 @@ def create_projeto():
 
 @api_bp.route('/projetos/<int:pid>', methods=['PUT'])
 def update_projeto(pid):
+    # Projetos em status bloqueado não podem ser alterados
+    err = _exigir_editavel(pid)
+    if err:
+        return err
     data = request.get_json()
     db = get_db()
     # Previsao NÃO é atualizada aqui — ela é sempre recalculada pelas atividades.
@@ -245,7 +266,15 @@ def update_projeto(pid):
 
 @api_bp.route('/projetos/<int:pid>', methods=['DELETE'])
 def delete_projeto(pid):
+    # Exclusão permitida apenas para projetos Novo/Em Andamento
+    err = _exigir_editavel(pid)
+    if err:
+        return err
     db = get_db()
+    # Remove registros filhos (atividades, atualizações, cobranças)
+    db.execute("DELETE FROM atividades WHERE Id_projetos = ?", (pid,))
+    db.execute("DELETE FROM atualizacoes WHERE Id_projetos = ?", (pid,))
+    db.execute("DELETE FROM cobranca WHERE Id_projetos = ?", (pid,))
     db.execute("DELETE FROM projetos WHERE ID = ?", (pid,))
     db.commit()
     return jsonify({'ok': True})
@@ -269,6 +298,10 @@ def list_atividades(pid):
 
 @api_bp.route('/projetos/<int:pid>/atividades', methods=['POST'])
 def create_atividade(pid):
+    # Inclusão de atividades apenas com projeto editável
+    err = _exigir_editavel(pid)
+    if err:
+        return err
     data = request.get_json()
     db = get_db()
 
@@ -339,6 +372,10 @@ def batch_atividades(pid):
     Dependências são resolvidas por número de sequência (não por ID do banco).
     Datas de atividades dependentes são recalculadas em cascata.
     """
+    # Edição de atividades apenas com projeto editável
+    err = _exigir_editavel(pid)
+    if err:
+        return err
     data = request.get_json()
     atividades = data.get('atividades', [])
     db = get_db()
@@ -476,8 +513,14 @@ def batch_atividades(pid):
 
 @api_bp.route('/atividades/<int:aid>', methods=['PUT'])
 def update_atividade(aid):
-    data = request.get_json()
     db = get_db()
+    ativ = db.execute("SELECT Id_projetos FROM atividades WHERE ID = ?", (aid,)).fetchone()
+    if not ativ:
+        return jsonify({'error': 'Atividade não encontrada'}), 404
+    err = _exigir_editavel(ativ['Id_projetos'])
+    if err:
+        return err
+    data = request.get_json()
     db.execute("""
         UPDATE atividades SET
             sequencia = ?, Atividade = ?, Responsavel = ?, Dependencia = ?,
@@ -505,6 +548,11 @@ def update_atividade(aid):
 def delete_atividade(aid):
     db = get_db()
     ativ = db.execute("SELECT Id_projetos FROM atividades WHERE ID = ?", (aid,)).fetchone()
+    if not ativ:
+        return jsonify({'error': 'Atividade não encontrada'}), 404
+    err = _exigir_editavel(ativ['Id_projetos'])
+    if err:
+        return err
     db.execute("DELETE FROM atividades WHERE ID = ?", (aid,))
     db.commit()
     if ativ:
@@ -551,9 +599,10 @@ def finalizar_projeto_route(pid):
 
 @api_bp.route('/projetos/<int:pid>/cancelar', methods=['POST'])
 def cancelar_projeto_route(pid):
+    data = request.get_json(silent=True) or {}
     db = get_db()
     try:
-        B.cancelar_projeto(db, pid)
+        B.cancelar_projeto(db, pid, data.get('observacao'))
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     return jsonify({'ok': True})
@@ -561,9 +610,49 @@ def cancelar_projeto_route(pid):
 
 @api_bp.route('/projetos/<int:pid>/pausar', methods=['POST'])
 def pausar_projeto_route(pid):
+    data = request.get_json(silent=True) or {}
     db = get_db()
     try:
-        B.pausar_projeto(db, pid)
+        B.pausar_projeto(db, pid, data.get('observacao'))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'ok': True})
+
+
+@api_bp.route('/projetos/<int:pid>/reativar', methods=['POST'])
+def reativar_projeto_route(pid):
+    """Reativa um projeto cancelado: projeto e atividades canceladas
+    voltam para 'Em Andamento', liberando todas as funcionalidades."""
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    try:
+        B.reativar_projeto(db, pid, data.get('observacao'))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'ok': True})
+
+
+@api_bp.route('/projetos/<int:pid>/despausar', methods=['POST'])
+def despausar_projeto_route(pid):
+    """Despausa um projeto pausado: projeto e atividades pausadas
+    voltam para 'Em Andamento', liberando todas as funcionalidades."""
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    try:
+        B.despausar_projeto(db, pid, data.get('observacao'))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'ok': True})
+
+
+@api_bp.route('/projetos/<int:pid>/retornar', methods=['POST'])
+def retornar_projeto_route(pid):
+    """Retorna um projeto 'Aguardando' ou 'Finalizado' ao fluxo.
+    Corpo: { status: 'Novo' | 'Em Andamento', observacao?: string }."""
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    try:
+        B.retornar_projeto(db, pid, data.get('status'), data.get('observacao'))
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     return jsonify({'ok': True})
@@ -573,7 +662,10 @@ def pausar_projeto_route(pid):
 def cobranca_route(pid):
     data = request.get_json()
     db = get_db()
-    B.registrar_cobranca(db, pid, data.get('data'), data.get('observacao', ''))
+    try:
+        B.registrar_cobranca(db, pid, data.get('data'), data.get('observacao', ''))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     return jsonify({'ok': True})
 
 
@@ -581,7 +673,10 @@ def cobranca_route(pid):
 def atualizacao_route(pid):
     data = request.get_json()
     db = get_db()
-    B.registrar_atualizacao(db, pid, data.get('data', B.today_iso()), data.get('observacao', ''))
+    try:
+        B.registrar_atualizacao(db, pid, data.get('data', B.today_iso()), data.get('observacao', ''))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     return jsonify({'ok': True})
 
 
@@ -903,9 +998,10 @@ def _build_pdf_html(projeto, atividades, atualizacoes, cobrancas, id_to_seq):
 
 @api_bp.route('/config/email', methods=['GET'])
 def get_email_config():
-    from app.email_sender import load_config, is_outlook_available
+    from app.email_sender import load_config, outlook_diagnostics
     config = load_config()
-    outlook_ok = is_outlook_available()
+    diag = outlook_diagnostics()
+    outlook_ok = diag.get('com', False)
     metodo = config.get('metodo', 'auto')
     # Determina se está configurado
     if metodo == 'outlook' or (metodo == 'auto' and outlook_ok):
@@ -919,6 +1015,7 @@ def get_email_config():
         'nome_remetente': config.get('nome_remetente', ''),
         'metodo': metodo,
         'outlook_disponivel': outlook_ok,
+        'outlook_detalhe': diag,
         'configured': configured,
     })
 

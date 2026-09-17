@@ -46,6 +46,35 @@ def today_iso():
 
 
 # ──────────────────────────────────────────────────────────────
+# Máquina de estados do projeto
+# ──────────────────────────────────────────────────────────────
+
+# Statuses em que o projeto pode sofrer alterações (atividades,
+# cobranças, transições de status etc.)
+STATUS_EDITAVEIS = ('Novo', 'Em Andamento')
+
+
+def status_do_projeto(db, proj_id):
+    """Retorna o Status atual do projeto (ou None se não existir)."""
+    row = db.execute("SELECT Status FROM projetos WHERE ID = ?", (proj_id,)).fetchone()
+    return row['Status'] if row else None
+
+
+def _exigir_status_projeto(db, proj_id, permitidos, acao):
+    """Garante que o projeto está em um dos status permitidos para a ação.
+    Caso contrário, levanta ValueError com mensagem clara."""
+    st = status_do_projeto(db, proj_id)
+    if st is None:
+        raise ValueError('Projeto não encontrado')
+    if st not in permitidos:
+        raise ValueError(
+            f"Não é possível {acao} o projeto: status atual é '{st}' "
+            f"(permitido apenas para {', '.join(permitidos)})."
+        )
+    return st
+
+
+# ──────────────────────────────────────────────────────────────
 # Cálculo de dias úteis
 # ──────────────────────────────────────────────────────────────
 
@@ -451,6 +480,10 @@ def finalizar_atividade(db, ativ_id, novo_status, data_fim):
     if not ativ:
         raise ValueError('Atividade não encontrada')
 
+    # Projeto bloqueado (Pausado/Cancelado/Aguardando/Finalizado)
+    # não permite alterar status de atividades
+    _exigir_status_projeto(db, ativ['Id_projetos'], STATUS_EDITAVEIS, 'alterar atividades de')
+
     status_fin = None
     if novo_status == 'Finalizado' and data_fim:
         situacao = calcular_situacao('Finalizado', ativ['Previsao'], data_fim)
@@ -493,7 +526,10 @@ def finalizar_projeto(db, proj_id, observacao_geral):
     - Finalizacao = data da última atividade finalizada
     - Status = 'Finalizado'
     - Observacao_Geral = texto informado
+    Permitido a partir de Novo/Em Andamento/Aguardando (todas as atividades finalizadas).
     """
+    _exigir_status_projeto(db, proj_id, ('Novo', 'Em Andamento', 'Aguardando'), 'finalizar')
+
     if not pode_finalizar_projeto(db, proj_id):
         raise ValueError('Ainda existem atividades não finalizadas.')
 
@@ -524,6 +560,8 @@ def enviar_para_analise(db, proj_id, resolucao_final):
     - Status = 'Aguardando'
     - Resolucao_Final = texto informado
     """
+    _exigir_status_projeto(db, proj_id, STATUS_EDITAVEIS, 'enviar para análise')
+
     if not pode_finalizar_projeto(db, proj_id):
         raise ValueError('Ainda existem atividades não finalizadas.')
 
@@ -548,6 +586,8 @@ def enviar_para_analise(db, proj_id, resolucao_final):
 
 def registrar_cobranca(db, proj_id, data, observacao):
     """Registra uma cobrança e atualiza projetos.cobranca."""
+    _exigir_status_projeto(db, proj_id, STATUS_EDITAVEIS, 'registrar cobrança em')
+
     db.execute("""
         INSERT INTO cobranca (Id_projetos, data, observacao)
         VALUES (?, ?, ?)
@@ -569,6 +609,8 @@ def registrar_cobranca(db, proj_id, data, observacao):
 # ──────────────────────────────────────────────────────────────
 
 def registrar_atualizacao(db, proj_id, data, observacao):
+    _exigir_status_projeto(db, proj_id, ('Novo', 'Em Andamento', 'Aguardando'),
+                           'registrar atualização em')
     db.execute("""
         INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
         VALUES (?, ?, ?)
@@ -612,25 +654,24 @@ def recalcular_previsao_projeto(db, proj_id):
 # Cancelar / Pausar projeto
 # ──────────────────────────────────────────────────────────────
 
-def cancelar_projeto(db, proj_id):
+def cancelar_projeto(db, proj_id, observacao=None):
     """
     Cancela o projeto:
-    - Todas as atividades NÃO finalizadas recebem status='Cancelado' e
-      Finalizacao = data de hoje.
+    - Todas as atividades com status 'Novo' ou 'Em Andamento' recebem
+      status='Cancelado' e Finalizacao = data de hoje.
     - Atividades já Finalizadas são preservadas.
     - O projeto recebe Status='Cancelado' e Finalizacao = hoje.
+    - Enquanto cancelado, o projeto não pode sofrer alterações (apenas Reativar).
     """
-    projeto = db.execute("SELECT * FROM projetos WHERE ID = ?", (proj_id,)).fetchone()
-    if not projeto:
-        raise ValueError('Projeto não encontrado')
+    _exigir_status_projeto(db, proj_id, STATUS_EDITAVEIS, 'cancelar')
 
     hoje = today_iso()
 
-    # Atividades não finalizadas → Cancelado + Finalizacao = hoje
+    # Atividades Novo/Em Andamento → Cancelado + Finalizacao = hoje
     db.execute("""
         UPDATE atividades
         SET status = 'Cancelado', Finalizacao = ?
-        WHERE Id_projetos = ? AND status != 'Finalizado'
+        WHERE Id_projetos = ? AND status IN ('Novo', 'Em Andamento')
     """, (hoje, proj_id))
 
     # Projeto → Cancelado + Finalizacao = hoje
@@ -641,32 +682,34 @@ def cancelar_projeto(db, proj_id):
     """, (hoje, proj_id))
     db.commit()
 
+    obs_txt = "Projeto cancelado. Atividades não finalizadas marcadas como canceladas."
+    if observacao:
+        obs_txt += f" Motivo: {observacao}"
     db.execute("""
         INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
         VALUES (?, ?, ?)
-    """, (proj_id, hoje, "Projeto cancelado. Atividades não finalizadas marcadas como canceladas."))
+    """, (proj_id, hoje, obs_txt))
     db.commit()
 
 
-def pausar_projeto(db, proj_id):
+def pausar_projeto(db, proj_id, observacao=None):
     """
     Pausa o projeto:
-    - Todas as atividades NÃO finalizadas recebem status='Pausado' e
-      Finalizacao = data de hoje (registro da parada).
+    - Todas as atividades com status 'Novo' ou 'Em Andamento' recebem
+      status='Pausado' e Finalizacao = data de hoje (registro da parada).
     - Atividades já Finalizadas são preservadas.
     - O projeto recebe Status='Pausado' e Finalizacao = hoje.
+    - Enquanto pausado, o projeto não pode sofrer alterações (apenas Despausar).
     """
-    projeto = db.execute("SELECT * FROM projetos WHERE ID = ?", (proj_id,)).fetchone()
-    if not projeto:
-        raise ValueError('Projeto não encontrado')
+    _exigir_status_projeto(db, proj_id, STATUS_EDITAVEIS, 'pausar')
 
     hoje = today_iso()
 
-    # Atividades não finalizadas → Pausado + Finalizacao = hoje
+    # Atividades Novo/Em Andamento → Pausado + Finalizacao = hoje
     db.execute("""
         UPDATE atividades
         SET status = 'Pausado', Finalizacao = ?
-        WHERE Id_projetos = ? AND status != 'Finalizado'
+        WHERE Id_projetos = ? AND status IN ('Novo', 'Em Andamento')
     """, (hoje, proj_id))
 
     # Projeto → Pausado + Finalizacao = hoje
@@ -677,8 +720,116 @@ def pausar_projeto(db, proj_id):
     """, (hoje, proj_id))
     db.commit()
 
+    obs_txt = "Projeto pausado. Atividades não finalizadas marcadas como pausadas."
+    if observacao:
+        obs_txt += f" Motivo: {observacao}"
     db.execute("""
         INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
         VALUES (?, ?, ?)
-    """, (proj_id, hoje, "Projeto pausado. Atividades não finalizadas marcadas como pausadas."))
+    """, (proj_id, hoje, obs_txt))
+    db.commit()
+
+
+# ──────────────────────────────────────────────────────────────
+# Reativar / Despausar / Retornar
+# ──────────────────────────────────────────────────────────────
+
+def reativar_projeto(db, proj_id, observacao=None):
+    """
+    Reativa um projeto cancelado:
+    - Projeto → 'Em Andamento' (Finalizacao limpa).
+    - Atividades 'Canceladas' → 'Em Andamento' (Finalizacao limpa).
+    - Todas as funcionalidades voltam a ficar disponíveis.
+    """
+    _exigir_status_projeto(db, proj_id, ('Cancelado',), 'reativar')
+
+    hoje = today_iso()
+
+    db.execute("""
+        UPDATE atividades
+        SET status = 'Em Andamento', Finalizacao = NULL, Status_Finalizacao = NULL
+        WHERE Id_projetos = ? AND status = 'Cancelado'
+    """, (proj_id,))
+
+    db.execute("""
+        UPDATE projetos
+        SET Status = 'Em Andamento', Finalizacao = NULL
+        WHERE ID = ?
+    """, (proj_id,))
+    db.commit()
+
+    obs_txt = "Projeto reativado: voltou para 'Em Andamento'. Atividades canceladas retornaram para 'Em Andamento'."
+    if observacao:
+        obs_txt += f" Motivo: {observacao}"
+    db.execute("""
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
+        VALUES (?, ?, ?)
+    """, (proj_id, hoje, obs_txt))
+    db.commit()
+
+
+def despausar_projeto(db, proj_id, observacao=None):
+    """
+    Despausa um projeto pausado:
+    - Projeto → 'Em Andamento' (Finalizacao limpa).
+    - Atividades 'Pausadas' → 'Em Andamento' (Finalizacao limpa).
+    - Todas as funcionalidades voltam a ficar disponíveis.
+    """
+    _exigir_status_projeto(db, proj_id, ('Pausado',), 'despausar')
+
+    hoje = today_iso()
+
+    db.execute("""
+        UPDATE atividades
+        SET status = 'Em Andamento', Finalizacao = NULL, Status_Finalizacao = NULL
+        WHERE Id_projetos = ? AND status = 'Pausado'
+    """, (proj_id,))
+
+    db.execute("""
+        UPDATE projetos
+        SET Status = 'Em Andamento', Finalizacao = NULL
+        WHERE ID = ?
+    """, (proj_id,))
+    db.commit()
+
+    obs_txt = "Projeto despausado: voltou para 'Em Andamento'. Atividades pausadas retornaram para 'Em Andamento'."
+    if observacao:
+        obs_txt += f" Motivo: {observacao}"
+    db.execute("""
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
+        VALUES (?, ?, ?)
+    """, (proj_id, hoje, obs_txt))
+    db.commit()
+
+
+def retornar_projeto(db, proj_id, novo_status, observacao=None):
+    """
+    Retorna um projeto 'Aguardando' (análise) ou 'Finalizado' para o fluxo:
+    - Projeto → novo_status ('Novo' ou 'Em Andamento', escolhido pelo usuário).
+    - Finalizacao do projeto é limpa.
+    - Os status das atividades são preservados (editáveis novamente via Esquema).
+    """
+    if novo_status not in ('Novo', 'Em Andamento'):
+        raise ValueError("Novo status inválido. Use 'Novo' ou 'Em Andamento'.")
+
+    _exigir_status_projeto(db, proj_id, ('Aguardando', 'Finalizado'), 'retornar')
+
+    hoje = today_iso()
+    status_anterior = status_do_projeto(db, proj_id)
+
+    db.execute("""
+        UPDATE projetos
+        SET Status = ?, Finalizacao = NULL
+        WHERE ID = ?
+    """, (novo_status, proj_id))
+    db.commit()
+
+    obs_txt = (f"Projeto retornado de '{status_anterior}' para '{novo_status}'. "
+               f"Atividades e campos voltaram a ser editáveis.")
+    if observacao:
+        obs_txt += f" Motivo: {observacao}"
+    db.execute("""
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
+        VALUES (?, ?, ?)
+    """, (proj_id, hoje, obs_txt))
     db.commit()
