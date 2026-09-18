@@ -138,6 +138,9 @@ const ProjetoView = (() => {
     let projetosCache = []; // cache para ordenação client-side
     let sortCol = null;     // coluna atual de ordenação
     let sortAsc = true;     // direção
+    let selStatus = [];     // filtros selecionados (module-level para abrirProjeto)
+    let selResp = [];
+    let selSetor = [];
 
     function sortProjetos(lista, col, asc) {
         if (!col) return lista;
@@ -262,17 +265,17 @@ const ProjetoView = (() => {
         const respOpts = resps.map(r => ({value: r.Nome, label: r.Nome}));
         const setorOpts = setores.map(s => ({value: s.Nome, label: s.Nome}));
 
-        let selStatus = [], selResp = [], selSetor = [];
+        let msS, msR, msT;
 
-        const msS = App.multiselect({
+        msS = App.multiselect({
             options: statusOpts, selected: selStatus, placeholder: 'Todos',
             onChange: (v) => { selStatus = v; refreshCascata(); }
         });
-        const msR = App.multiselect({
+        msR = App.multiselect({
             options: respOpts, selected: selResp, placeholder: 'Todos',
             onChange: (v) => { selResp = v; refreshCascata(); }
         });
-        const msT = App.multiselect({
+        msT = App.multiselect({
             options: setorOpts, selected: selSetor, placeholder: 'Todos',
             onChange: (v) => { selSetor = v; refreshCascata(); }
         });
