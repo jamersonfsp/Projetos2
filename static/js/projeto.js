@@ -543,7 +543,6 @@ const ProjetoView = (() => {
                             ${isFinalizado
                                 ? '<button class="btn btn-success" id="btnRetornar" title="Devolve o projeto a Novo ou Em Andamento">↩️ Retornar</button>'
                                 : `<button class="btn btn-success" id="btnFinalizar" ${dis(editavel || isAguardando)} ${editavel || isAguardando ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento/Aguardando"'}>Finalizar Projeto</button>`}
-                            <button class="btn btn-primary" id="btnCobranca" ${dis(editavel)} ${editavel ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento"'}>Cobrança</button>
                             <button class="btn btn-secondary" id="btnAtualizacao" ${dis(editavel || isAguardando)} ${editavel || isAguardando ? '' : 'title="Disponível apenas para projetos Novo/Em Andamento/Aguardando"'}>Atualização</button>
                             ${isPausado
                                 ? '<button class="btn btn-secondary" id="btnDespausar" title="Devolve o projeto e as atividades pausadas para Em Andamento">▶️ Despausar</button>'
@@ -600,7 +599,6 @@ const ProjetoView = (() => {
             const elReativar = document.getElementById('btnReativar');
             if (elReativar) elReativar.addEventListener('click', () => reativar(pid));
 
-            document.getElementById('btnCobranca').addEventListener('click', () => cobranca(pid));
             document.getElementById('btnAtualizacao').addEventListener('click', () => atualizacao(pid));
             document.getElementById('btnExcluir').addEventListener('click', () => excluir(pid));
             document.getElementById('btnExportPdf').addEventListener('click', () => exportPdf(pid));
@@ -718,41 +716,6 @@ const ProjetoView = (() => {
         });
     }
 
-    function cobranca(pid) {
-        const m = App.modal({
-            title: 'Registrar Cobrança',
-            size: 'md',
-            body: `
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Data *</label>
-                        <input type="date" id="fData" value="${App.todayISO()}">
-                    </div>
-                    <div class="form-group span-2">
-                        <label>Observação</label>
-                        <textarea id="fObs" rows="3" placeholder="Detalhe da cobrança..."></textarea>
-                    </div>
-                </div>
-            `,
-            footer: [
-                App.el('button', { class: 'btn btn-secondary', onclick: (e) => e.target.closest('.modal-backdrop').remove() }, 'Cancelar'),
-                App.el('button', { class: 'btn btn-primary', id: 'btnSaveCobr' }, 'Registrar'),
-            ]
-        });
-        document.getElementById('btnSaveCobr').addEventListener('click', async () => {
-            const data = document.getElementById('fData').value;
-            const obs = document.getElementById('fObs').value.trim();
-            if (!data) { App.toast('Informe a data', 'warning'); return; }
-            try {
-                await API.projetos.cobranca(pid, { data, observacao: obs });
-                App.toast('Cobrança registrada', 'success');
-                m.close();
-                renderTela(pid);
-            } catch (e) {
-                App.toast('Erro: ' + e.message, 'error');
-            }
-        });
-    }
 
     function atualizacao(pid) {
         const m = App.modal({
