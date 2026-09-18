@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS atualizacoes (
     Id_projetos  INTEGER NOT NULL,
     Data         TEXT,
     Observacao   TEXT,
+    tipo         TEXT DEFAULT 'U',
     FOREIGN KEY (Id_projetos) REFERENCES projetos(ID) ON DELETE CASCADE
 );
 
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS atividades (
     Status_Finalizacao TEXT,
     Sabado             INTEGER DEFAULT 1,
     Domingo            INTEGER DEFAULT 1,
+    Cobranca           TEXT,
     FOREIGN KEY (Id_projetos) REFERENCES projetos(ID) ON DELETE CASCADE
 );
 
@@ -60,9 +62,11 @@ CREATE TABLE IF NOT EXISTS atividades (
 CREATE TABLE IF NOT EXISTS cobranca (
     ID           INTEGER PRIMARY KEY AUTOINCREMENT,
     Id_projetos  INTEGER NOT NULL,
+    Id_Atividade INTEGER,
     data         TEXT,
     observacao   TEXT,
-    FOREIGN KEY (Id_projetos) REFERENCES projetos(ID) ON DELETE CASCADE
+    FOREIGN KEY (Id_projetos) REFERENCES projetos(ID) ON DELETE CASCADE,
+    FOREIGN KEY (Id_Atividade) REFERENCES atividades(ID) ON DELETE SET NULL
 );
 
 -- Responsáveis
@@ -84,6 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_ativ_status   ON atividades(status);
 CREATE INDEX IF NOT EXISTS idx_ativ_previsao ON atividades(Previsao);
 CREATE INDEX IF NOT EXISTS idx_proj_status   ON projetos(Status);
 CREATE INDEX IF NOT EXISTS idx_cobr_projeto  ON cobranca(Id_projetos);
+CREATE INDEX IF NOT EXISTS idx_cobr_atividade ON cobranca(Id_Atividade);
 CREATE INDEX IF NOT EXISTS idx_atlz_projeto  ON atualizacoes(Id_projetos);
 
 -- Modelos de Atividades

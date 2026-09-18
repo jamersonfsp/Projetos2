@@ -73,7 +73,11 @@ const API = (() => {
             update: (id, data)   => request('PUT',  `/api/atividades/${id}`, data),
             delete: (id)         => request('DELETE', `/api/atividades/${id}`),
             finalizar: (id, data)=> request('POST', `/api/atividades/${id}/finalizar`, data),
+            cobranca:  (id)      => request('POST', `/api/atividades/${id}/cobranca`),
+            cobrancas: (projId)  => request('GET',  `/api/projetos/${projId}/atividades/cobrancas`),
         },
+        // Cobrança em lote
+        cobrancaBatch: (data)    => request('POST', '/api/cobranca/batch', data),
         // Dashboard
         dashboard: (params = {}) => {
             const qs = new URLSearchParams();

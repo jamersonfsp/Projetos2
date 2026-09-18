@@ -239,13 +239,11 @@ def relatorio_diario(db):
     Filtro geral:
     - Atividades com dependência em atividade NÃO finalizada são excluídas.
 
-    Regras por faixa de dias (Previsao - hoje, em dias corridos):
-    0. Previsão > 30 dias  → NÃO entra na lista.
-    1. Previsão entre 16-30 dias → entra apenas se NÃO houve cobrança nos
-       últimos 15 dias úteis.
-    2. Previsão < 0 (atrasada) → entra, exceto se já cobrada hoje.
-    3. Previsão = 0 (vence hoje) → entra, exceto se já cobrada hoje.
-    4. Previsão 1-15 dias → entra se sem cobrança há >2 dias úteis.
+    Regras:
+    1. Atrasada (Previsao < hoje) → entra, exceto se já cobrada hoje.
+    2. Vence hoje (Previsao = hoje) → entra, exceto se já cobrada hoje.
+    3. Vence em até 2 dias (Previsao = hoje+1 ou hoje+2) → entra, exceto se já cobrada hoje.
+    4. Demais → NÃO entra.
     """
     hoje = today()
     hoje_iso = hoje.isoformat()
@@ -258,10 +256,10 @@ def relatorio_diario(db):
                a.Responsavel   AS ativ_responsavel,
                a.sequencia     AS sequencia,
                a.Dependencia   AS ativ_dep_id,
+               a.Cobranca      AS ativ_cobranca,
                p.ID            AS proj_id,
                p.Titulo        AS proj_titulo,
                p.Responsavel   AS proj_responsavel,
-               p.cobranca      AS proj_cobranca,
                p.Status        AS proj_status
         FROM atividades a
         JOIN projetos p ON p.ID = a.Id_projetos
@@ -280,10 +278,6 @@ def relatorio_diario(db):
 
         dias_corridos = (prev - hoje).days
 
-        # ── Filtro 0: Previsão > 30 dias → não entra ──
-        if dias_corridos > 30:
-            continue
-
         # ── Filtro: dependência não finalizada → não entra ──
         if r['ativ_dep_id']:
             dep = db.execute(
@@ -293,21 +287,13 @@ def relatorio_diario(db):
             if dep and dep['status'] != 'Finalizado':
                 continue
 
-        motivo = None
-        cob = parse_date(r['proj_cobranca'])
+        # ── Usa cobrança da ATIVIDADE (não mais do projeto) ──
+        cob = parse_date(r['ativ_cobranca'])
 
-        # ── Faixa 16-30 dias: entra só se sem cobrança nos últimos 15 dias úteis ──
-        if 16 <= dias_corridos <= 30:
-            if cob:
-                dias_uteis_desde_cob = business_days_between(
-                    cob, hoje, skip_saturday=True, skip_sunday=True
-                )
-                if dias_uteis_desde_cob <= 15:
-                    continue  # cobrança recente, não entra
-            motivo = 'Monitoramento (+15 dias)'
+        motivo = None
 
         # ── Atrasada (previsão < hoje) ──
-        elif dias_corridos < 0:
+        if dias_corridos < 0:
             if cob and cob == hoje:
                 continue  # já cobrada hoje
             motivo = 'Atrasada'
@@ -318,18 +304,15 @@ def relatorio_diario(db):
                 continue  # já cobrada hoje
             motivo = 'Vence hoje'
 
-        # ── 1 a 15 dias: regra de 2 dias úteis ──
+        # ── Vence em 1 ou 2 dias ──
+        elif dias_corridos <= 2:
+            if cob and cob == hoje:
+                continue  # já cobrada hoje
+            motivo = f'Vence em {dias_corridos} dia(s)'
+
+        # ── Demais (> 2 dias) → não entra ──
         else:
-            if cob is None:
-                motivo = 'Sem cobrança registrada'
-            else:
-                dias_uteis = business_days_between(
-                    cob, hoje, skip_saturday=True, skip_sunday=True
-                )
-                if dias_uteis > 2:
-                    motivo = f'Sem cobrança há {dias_uteis} dias úteis'
-                else:
-                    continue  # cobrança recente, não entra
+            continue
 
         lista.append({
             'ativ_id': r['ativ_id'],
@@ -499,8 +482,8 @@ def finalizar_atividade(db, ativ_id, novo_status, data_fim):
     # Registra atualização no projeto
     obs = f"Atividade {ativ['sequencia']} - {ativ['Atividade']}: status alterado para {novo_status}"
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (ativ['Id_projetos'], today_iso(), obs))
     db.commit()
 
@@ -548,8 +531,8 @@ def finalizar_projeto(db, proj_id, observacao_geral):
     db.commit()
 
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, today_iso(), f"Projeto finalizado. Observação: {observacao_geral}"))
     db.commit()
 
@@ -574,8 +557,8 @@ def enviar_para_analise(db, proj_id, resolucao_final):
     db.commit()
 
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, today_iso(), f"Projeto enviado para análise. Resolução: {resolucao_final}"))
     db.commit()
 
@@ -598,8 +581,8 @@ def registrar_cobranca(db, proj_id, data, observacao):
     db.commit()
 
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, today_iso(), f"Cobrança registrada em {format_date_br(data)}: {observacao}"))
     db.commit()
 
@@ -612,8 +595,8 @@ def registrar_atualizacao(db, proj_id, data, observacao):
     _exigir_status_projeto(db, proj_id, ('Novo', 'Em Andamento', 'Aguardando'),
                            'registrar atualização em')
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, data, observacao))
     db.commit()
 
@@ -643,8 +626,8 @@ def recalcular_previsao_projeto(db, proj_id):
     if anterior != maior:
         db.execute("UPDATE projetos SET Previsao = ? WHERE ID = ?", (maior, proj_id))
         db.execute("""
-            INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-            VALUES (?, ?, ?)
+            INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+            VALUES (?, ?, ?, 'S')
         """, (proj_id, today_iso(),
               f"Previsão do projeto alterada de {format_date_br(anterior)} para {format_date_br(maior)} (devido às atividades)."))
         db.commit()
@@ -686,8 +669,8 @@ def cancelar_projeto(db, proj_id, observacao=None):
     if observacao:
         obs_txt += f" Motivo: {observacao}"
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, hoje, obs_txt))
     db.commit()
 
@@ -724,8 +707,8 @@ def pausar_projeto(db, proj_id, observacao=None):
     if observacao:
         obs_txt += f" Motivo: {observacao}"
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, hoje, obs_txt))
     db.commit()
 
@@ -762,8 +745,8 @@ def reativar_projeto(db, proj_id, observacao=None):
     if observacao:
         obs_txt += f" Motivo: {observacao}"
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, hoje, obs_txt))
     db.commit()
 
@@ -796,8 +779,8 @@ def despausar_projeto(db, proj_id, observacao=None):
     if observacao:
         obs_txt += f" Motivo: {observacao}"
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, hoje, obs_txt))
     db.commit()
 
@@ -829,7 +812,7 @@ def retornar_projeto(db, proj_id, novo_status, observacao=None):
     if observacao:
         obs_txt += f" Motivo: {observacao}"
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (proj_id, hoje, obs_txt))
     db.commit()

@@ -229,8 +229,8 @@ def create_projeto():
     B.recalcular_previsao_projeto(db, pid)
     # Registra atualização
     db.execute("""
-        INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-        VALUES (?, ?, ?)
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
     """, (pid, B.today_iso(), f"Projeto criado: {data.get('Titulo')}"))
     db.commit()
     return jsonify({'ID': pid}), 201
@@ -677,6 +677,12 @@ def atualizacao_route(pid):
         B.registrar_atualizacao(db, pid, data.get('data', B.today_iso()), data.get('observacao', ''))
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+    # Marca como tipo 'U' (usuário)
+    db.execute("""
+        UPDATE atualizacoes SET tipo = 'U'
+        WHERE Id_projetos = ? AND ID = (SELECT MAX(ID) FROM atualizacoes WHERE Id_projetos = ?)
+    """, (pid, pid))
+    db.commit()
     return jsonify({'ok': True})
 
 
@@ -738,6 +744,91 @@ def calcular_inicio_route():
     else:
         result = data.get('projeto_inicio')
     return jsonify({'inicio': result, 'inicio_br': B.format_date_br(result)})
+
+
+# ──────────────────────────────────────────────────────────────
+# Cobrança por Atividade
+# ──────────────────────────────────────────────────────────────
+
+@api_bp.route('/atividades/<int:aid>/cobranca', methods=['POST'])
+def cobranca_atividade_route(aid):
+    """Registra cobrança em uma atividade específica (data=today, obs padrão)."""
+    db = get_db()
+    ativ = db.execute("SELECT * FROM atividades WHERE ID = ?", (aid,)).fetchone()
+    if not ativ:
+        return jsonify({'error': 'Atividade não encontrada'}), 404
+    st = _status_projeto(db, ativ['Id_projetos'])
+    if st not in ('Novo', 'Em Andamento'):
+        return jsonify({'error': f"Projeto em status '{st}' não permite cobrança."}), 400
+
+    hoje = B.today_iso()
+    observacao = 'Cobrança Realizada'
+
+    db.execute("""
+        INSERT INTO cobranca (Id_projetos, Id_Atividade, data, observacao)
+        VALUES (?, ?, ?, ?)
+    """, (ativ['Id_projetos'], aid, hoje, observacao))
+    db.execute("UPDATE atividades SET Cobranca = ? WHERE ID = ?", (hoje, aid))
+    db.execute("UPDATE projetos SET cobranca = ? WHERE ID = ?", (hoje, ativ['Id_projetos']))
+    db.execute("""
+        INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+        VALUES (?, ?, ?, 'S')
+    """, (ativ['Id_projetos'], hoje,
+          f"Cobrança registrada na atividade {ativ['sequencia']} - {ativ['Atividade']}"))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@api_bp.route('/cobranca/batch', methods=['POST'])
+def cobranca_batch_route():
+    """Registra cobrança em lote para múltiplas atividades."""
+    data = request.get_json()
+    atividade_ids = data.get('atividade_ids', [])
+    if not atividade_ids:
+        return jsonify({'error': 'Nenhuma atividade informada'}), 400
+
+    db = get_db()
+    hoje = B.today_iso()
+    observacao = 'Cobrança Realizada'
+    count = 0
+
+    for aid in atividade_ids:
+        ativ = db.execute("SELECT * FROM atividades WHERE ID = ?", (aid,)).fetchone()
+        if not ativ:
+            continue
+        st = _status_projeto(db, ativ['Id_projetos'])
+        if st not in ('Novo', 'Em Andamento'):
+            continue
+
+        db.execute("""
+            INSERT INTO cobranca (Id_projetos, Id_Atividade, data, observacao)
+            VALUES (?, ?, ?, ?)
+        """, (ativ['Id_projetos'], aid, hoje, observacao))
+        db.execute("UPDATE atividades SET Cobranca = ? WHERE ID = ?", (hoje, aid))
+        db.execute("UPDATE projetos SET cobranca = ? WHERE ID = ?", (hoje, ativ['Id_projetos']))
+        db.execute("""
+            INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+            VALUES (?, ?, ?, 'S')
+        """, (ativ['Id_projetos'], hoje,
+              f"Cobrança em lote — atividade {ativ['sequencia']} - {ativ['Atividade']}"))
+        count += 1
+
+    db.commit()
+    return jsonify({'ok': True, 'count': count})
+
+
+@api_bp.route('/projetos/<int:pid>/atividades/cobrancas', methods=['GET'])
+def list_cobrancas_atividades(pid):
+    """Lista cobranças de todas as atividades de um projeto."""
+    db = get_db()
+    rows = db.execute("""
+        SELECT c.*, a.sequencia, a.Atividade AS ativ_nome
+        FROM cobranca c
+        LEFT JOIN atividades a ON a.ID = c.Id_Atividade
+        WHERE c.Id_projetos = ?
+        ORDER BY c.data DESC, c.ID DESC
+    """, (pid,)).fetchall()
+    return jsonify([row_to_dict(r) for r in rows])
 
 
 # ──────────────────────────────────────────────────────────────
@@ -1232,8 +1323,8 @@ def enviar_email_projeto(pid):
     if result.get('ok'):
         # Registra no histórico
         db.execute("""
-            INSERT INTO atualizacoes (Id_projetos, Data, Observacao)
-            VALUES (?, ?, ?)
+            INSERT INTO atualizacoes (Id_projetos, Data, Observacao, tipo)
+            VALUES (?, ?, ?, 'S')
         """, (pid, B.today_iso(),
               f"E-mail de abertura enviado para: {', '.join(emails_set)}"))
         db.commit()

@@ -188,7 +188,7 @@ const ProjetoView = (() => {
                 <td>${App.fmtDate(p.Inicio)}</td>
                 <td>${App.fmtDate(p.Fim)}</td>
                 <td class="situacao-cell">${App.situacaoBadge(p.Situacao)}</td>
-                <td><button class="btn btn-sm btn-primary" onclick="App.navigate('/projeto/${p.ID}')">Abrir</button></td>
+                <td><button class="btn btn-sm btn-primary" onclick="ProjetoView.abrirProjeto(${p.ID})">Abrir</button></td>
             </tr>
         `).join('');
     }
@@ -196,6 +196,9 @@ const ProjetoView = (() => {
     async function renderLista() {
         const view = document.getElementById('view');
         view.className = 'view-container projetos-view';
+
+        // Restaura filtros salvos no sessionStorage
+        const savedFilters = JSON.parse(sessionStorage.getItem('projetoListFilters') || '{}');
 
         // Carrega opções de filtros
         let resps = [], setores = [];
@@ -327,10 +330,24 @@ const ProjetoView = (() => {
             });
         });
 
-        // Busca inicial (sem filtros)
-        sortCol = null;
-        sortAsc = true;
-        buscar([], [], []);
+        // Busca inicial — restaura filtros salvos ou busca sem filtros
+        sortCol = savedFilters.sortCol || null;
+        sortAsc = savedFilters.sortAsc !== undefined ? savedFilters.sortAsc : true;
+        if (savedFilters.codigo) document.getElementById('fCodigo').value = savedFilters.codigo;
+        if (savedFilters.status && savedFilters.status.length) {
+            selStatus = savedFilters.status;
+            msS.set(selStatus);
+        }
+        if (savedFilters.responsavel && savedFilters.responsavel.length) {
+            selResp = savedFilters.responsavel;
+            msR.set(selResp);
+        }
+        if (savedFilters.setor && savedFilters.setor.length) {
+            selSetor = savedFilters.setor;
+            msT.set(selSetor);
+        }
+        updateSortIndicators();
+        buscar(selStatus, selResp, selSetor);
     }
 
     async function buscar(statuses, resps, setores) {
@@ -350,6 +367,20 @@ const ProjetoView = (() => {
         } catch (e) {
             App.toast('Erro: ' + e.message, 'error');
         }
+    }
+
+    // Salva filtros atuais no sessionStorage antes de abrir projeto
+    function abrirProjeto(pid) {
+        const filters = {
+            codigo: document.getElementById('fCodigo') ? document.getElementById('fCodigo').value : '',
+            status: [...selStatus],
+            responsavel: [...selResp],
+            setor: [...selSetor],
+            sortCol: sortCol,
+            sortAsc: sortAsc,
+        };
+        sessionStorage.setItem('projetoListFilters', JSON.stringify(filters));
+        App.navigate('/projeto/' + pid);
     }
 
     // ───────── TELA DO PROJETO ─────────
@@ -476,6 +507,7 @@ const ProjetoView = (() => {
                                                 <td>${a.Domingo ? '✓' : '—'}</td>
                                                 <td>
                                                     ${editavel && a.status !== 'Finalizado' ? `<button class="btn btn-sm btn-warning" onclick="ProjetoView.finalizarAtividade(${a.ID})">Finalizar</button>` : (a.status === 'Finalizado' ? '<span class="badge badge-success">OK</span>' : '—')}
+                                                    ${editavel && a.status !== 'Finalizado' ? ` <button class="btn btn-sm btn-cobranca" title="Registrar cobrança" onclick="ProjetoView.cobrancaAtividade(${a.ID})">📢</button>` : ''}
                                                 </td>
                                             </tr>
                                         `).join('') : `<tr><td colspan="13" class="text-center text-muted">Nenhuma atividade. Clique em "Esquema".</td></tr>`}
@@ -516,7 +548,7 @@ const ProjetoView = (() => {
                             </div>
                         </div>
                         <div class="notes-box" id="atualizacoesBox">
-                            ${atualizacoes.length ? atualizacoes.map(a => `<div class="note-entry"><span class="note-date">${App.fmtDate(a.Data)}</span><span class="note-text">${escapeHtml(a.Observacao || '')}</span></div>`).join('') : '<div class="text-muted">Sem atualizações registradas.</div>'}
+                            ${atualizacoes.length ? atualizacoes.map(a => `<div class="note-entry"><span class="note-date">${App.fmtDate(a.Data)}</span>${a.tipo === 'S' ? '<span class="badge badge-neutral" style="font-size:9px;margin-right:4px">SYS</span>' : ''}<span class="note-text">${escapeHtml(a.Observacao || '')}</span></div>`).join('') : '<div class="text-muted">Sem atualizações registradas.</div>'}
                         </div>
                         <div class="mt-3">
                             <h4 style="font-size:13px;margin-bottom:6px">Cobranças Registradas</h4>
@@ -615,8 +647,8 @@ const ProjetoView = (() => {
             body: `
                 <p class="text-sm text-muted mb-3">Requer que todas as atividades estejam finalizadas. O projeto passa para status "Aguardando" e a resolução final é registrada.</p>
                 <div class="form-group">
-                    <label>Resolução do Problema (até 500 caracteres) *</label>
-                    <textarea id="fResolucao" maxlength="500" rows="5" placeholder="Descreva a resolução..."></textarea>
+                    <label>Resolução do Problema (até 2000 caracteres) *</label>
+                    <textarea id="fResolucao" maxlength="2000" rows="5" placeholder="Descreva a resolução..."></textarea>
                 </div>
             `,
             footer: [
@@ -988,7 +1020,7 @@ const ProjetoView = (() => {
             const html = atualizacoes.length
                 ? atualizacoes.map(a => `
                     <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-                        <strong style="color:var(--primary);font-size:12px">${App.fmtDate(a.Data)}</strong>
+                        <strong style="color:var(--primary);font-size:12px">${App.fmtDate(a.Data)}</strong>${a.tipo === 'S' ? ' <span class="badge badge-neutral" style="font-size:9px">SYS</span>' : ''}
                         <p style="margin:4px 0 0;padding-left:8px;font-size:13px">${escapeHtml(a.Observacao || '')}</p>
                     </div>
                 `).join('')
@@ -1321,5 +1353,19 @@ const ProjetoView = (() => {
         });
     }
 
-    return { renderCadastro, renderLista, renderTela, finalizarAtividade, verAtualizacoes };
+    // ─── COBRANÇA RÁPIDA POR ATIVIDADE ───
+    async function cobrancaAtividade(aid) {
+        if (!App.confirm('Registrar cobrança nesta atividade?\n\nData: hoje\nObservação: Cobrança Realizada')) return;
+        try {
+            await API.atividades.cobranca(aid);
+            App.toast('Cobrança registrada!', 'success');
+            // Recarrega a tela
+            const hash = window.location.hash.match(/\/projeto\/(\d+)/);
+            if (hash) renderTela(hash[1]);
+        } catch (e) {
+            App.toast('Erro: ' + e.message, 'error');
+        }
+    }
+
+    return { renderCadastro, renderLista, renderTela, finalizarAtividade, verAtualizacoes, abrirProjeto, cobrancaAtividade };
 })();

@@ -45,6 +45,43 @@ Continuar as correções:
   ✅ IMPLEMENTADO
 
 ────────────────────────────────────
+5º Melhorias de UX e Dados (Set/2026)
+────────────────────────────────────
+
+1 - Preservar filtros ao voltar da Lista de Projetos
+- Ao clicar em "Sair"/"Voltar" na Tela do Projeto, os filtros da Lista (código, status, responsável, setor, ordenação) são restaurados.
+- Implementado via sessionStorage.
+  ✅ IMPLEMENTADO
+
+2 - Resolução Final: limite ampliado para 2000 caracteres
+- O popup "Para Análise" agora aceita até 2000 caracteres no campo Resolução Final.
+  ✅ IMPLEMENTADO
+
+3 - Atualizações: coluna "tipo" (S=sistema, U=usuário)
+- Nova coluna `tipo` na tabela `atualizacoes`.
+- Registros criados automaticamente pelo sistema (criação de projeto, alteração de status, cobrança, etc.) recebem tipo='S'.
+- Registros criados pelo usuário via botão "Atualização" recebem tipo='U'.
+- Badge "SYS" exibido na interface para registros do sistema.
+  ✅ IMPLEMENTADO
+
+4 - Cobrança: de projeto para atividade (fluxo rápido)
+- Tabela `cobranca` recebeu coluna `Id_Atividade` (FK para atividades).
+- Tabela `atividades` recebeu coluna `Cobranca` (data da última cobrança).
+- Botão de cobrança rápida (📢) adicionado em cada linha de atividade na Tela do Projeto.
+- Fluxo rápido: data=today, observação="Cobrança Realizada", popup de confirmação.
+- Relatório Diário agora usa cobrança da atividade (não mais do projeto).
+- Regras de cobrança e restrições de status mantidas.
+  ✅ IMPLEMENTADO
+
+5 - Relatório Diário: novas regras + checkbox + cobrança em lote
+- Regras simplificadas: apenas atividades atrasadas, vencendo hoje, ou vencendo em até 2 dias.
+- Checkbox em cada linha para seleção múltipla.
+- Checkbox "Selecionar todas" no cabeçalho.
+- Botão "Cobrança em Lote" para registrar cobrança em todas as atividades selecionadas de uma vez.
+- Atividades cobradas hoje são automaticamente removidas da lista.
+  ✅ IMPLEMENTADO
+
+────────────────────────────────────
 3º Correções e Melhorias Adicionais
 ────────────────────────────────────
 
