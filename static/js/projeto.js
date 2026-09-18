@@ -391,11 +391,24 @@ const ProjetoView = (() => {
         view.className = 'view-container projeto-view';
         view.innerHTML = '<div class="loading">Carregando projeto...</div>';
 
+        let data;
         try {
-            const data = await API.projetos.get(pid);
+            data = await API.projetos.get(pid);
+        } catch (e) {
+            view.innerHTML = `<div class="empty-state"><h3>Erro ao carregar projeto</h3><p>${escapeHtml(e.message)}</p><button class="btn btn-secondary" onclick="App.navigate('/projetos')">Voltar à Lista</button></div>`;
+            return;
+        }
+
+        if (!data || !data.projeto) {
+            view.innerHTML = `<div class="empty-state"><h3>Projeto não encontrado</h3><button class="btn btn-secondary" onclick="App.navigate('/projetos')">Voltar à Lista</button></div>`;
+            return;
+        }
+
+        try {
             const p = data.projeto;
-            const atividades = data.atividades;
-            const atualizacoes = data.atualizacoes;
+            const atividades = data.atividades || [];
+            const atualizacoes = data.atualizacoes || [];
+            const cobrancas = data.cobrancas || [];
 
             // ─── Máquina de estados dos botões ───
             const st = p.Status || 'Novo';
@@ -555,7 +568,7 @@ const ProjetoView = (() => {
                         <div class="mt-3">
                             <h4 style="font-size:13px;margin-bottom:6px">Cobranças Registradas</h4>
                             <div class="notes-box" style="max-height:200px;min-height:120px">
-                                ${data.cobrancas.length ? data.cobrancas.map(c => `<div class="note-entry"><span class="note-date">${App.fmtDate(c.data)}</span><span class="note-text">${escapeHtml(c.observacao || '')}</span></div>`).join('') : '<div class="text-muted">Sem cobranças registradas.</div>'}
+                                ${cobrancas.length ? cobrancas.map(c => `<div class="note-entry"><span class="note-date">${App.fmtDate(c.data)}</span><span class="note-text">${escapeHtml(c.observacao || '')}</span></div>`).join('') : '<div class="text-muted">Sem cobranças registradas.</div>'}
                             </div>
                         </div>
                     </div>
