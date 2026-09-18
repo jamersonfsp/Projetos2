@@ -119,9 +119,12 @@ const RelatorioView = (() => {
     }
 
     function updateSelectedCount() {
+        const countEl = document.getElementById('selectedCount');
+        const btnEl = document.getElementById('btnCobrancaLote');
+        if (!countEl || !btnEl) return; // elementos ainda não renderizados
         const count = selectedIds.size;
-        document.getElementById('selectedCount').textContent = count;
-        document.getElementById('btnCobrancaLote').disabled = count === 0;
+        countEl.textContent = count;
+        btnEl.disabled = count === 0;
     }
 
     function renderTabela() {

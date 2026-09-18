@@ -130,12 +130,33 @@ def close_db(e=None):
 
 
 def init_db():
-    """Cria o banco e o schema se não existirem."""
+    """Cria o banco e o schema se não existirem. Aplica migrações de colunas novas."""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.executescript(SCHEMA_SQL)
         conn.commit()
+
+        # Migração: adiciona colunas novas em tabelas existentes
+        migrations = [
+            ("atualizacoes", "tipo", "TEXT DEFAULT 'U'"),
+            ("cobranca", "Id_Atividade", "INTEGER"),
+            ("atividades", "Cobranca", "TEXT"),
+        ]
+        for table, column, col_type in migrations:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass  # coluna já existe
+
+        # Índice para cobranca por atividade (se não existir)
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_cobr_atividade ON cobranca(Id_Atividade)")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
     finally:
         conn.close()
 

@@ -333,19 +333,21 @@ const ProjetoView = (() => {
         // Busca inicial — restaura filtros salvos ou busca sem filtros
         sortCol = savedFilters.sortCol || null;
         sortAsc = savedFilters.sortAsc !== undefined ? savedFilters.sortAsc : true;
-        if (savedFilters.codigo) document.getElementById('fCodigo').value = savedFilters.codigo;
-        if (savedFilters.status && savedFilters.status.length) {
-            selStatus = savedFilters.status;
-            msS.set(selStatus);
-        }
-        if (savedFilters.responsavel && savedFilters.responsavel.length) {
-            selResp = savedFilters.responsavel;
-            msR.set(selResp);
-        }
-        if (savedFilters.setor && savedFilters.setor.length) {
-            selSetor = savedFilters.setor;
-            msT.set(selSetor);
-        }
+        try {
+            if (savedFilters.codigo) document.getElementById('fCodigo').value = savedFilters.codigo;
+            if (savedFilters.status && savedFilters.status.length && msS) {
+                selStatus = savedFilters.status;
+                msS.set(selStatus);
+            }
+            if (savedFilters.responsavel && savedFilters.responsavel.length && msR) {
+                selResp = savedFilters.responsavel;
+                msR.set(selResp);
+            }
+            if (savedFilters.setor && savedFilters.setor.length && msT) {
+                selSetor = savedFilters.setor;
+                msT.set(selSetor);
+            }
+        } catch (e) { console.warn('Erro ao restaurar filtros:', e); }
         updateSortIndicators();
         buscar(selStatus, selResp, selSetor);
     }
